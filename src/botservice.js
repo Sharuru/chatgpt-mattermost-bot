@@ -59,7 +59,7 @@ wsClient.addMessageListener(async function (event) {
 
                 let assistantCount = 0;
                 posts.forEach(threadPost => {
-                    log.trace({msg: threadPost})
+                    log.info({msg: threadPost})
                     if (threadPost.user_id === meId) {
                         chatmessages.push({role: "assistant", content: threadPost.props.originalMessage ?? threadPost.message})
                         assistantCount++
@@ -85,9 +85,9 @@ wsClient.addMessageListener(async function (event) {
                     typing()
                     const typingInterval = setInterval(typing, 2000)
                     try {
-                        log.trace({chatmessages})
+                        log.info({chatmessages})
                         const answer = await continueThread(chatmessages)
-                        log.trace({answer})
+                        log.info({answer})
                         const { message, fileId, props } = await processGraphResponse(answer, post.channel_id)
                         clearInterval(typingInterval)
                         const newPost = await mmClient.createPost({
@@ -97,7 +97,7 @@ wsClient.addMessageListener(async function (event) {
                             root_id: post.root_id || post.id,
                             file_ids: fileId ? [fileId] : undefined
                         })
-                        log.trace({msg: newPost})
+                        log.info({msg: newPost})
                     } catch(e) {
                         clearInterval(typingInterval)
                         log.error(e)
