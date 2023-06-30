@@ -19,7 +19,7 @@ let meId = null;
 mmClient.getMe().then(me => meId = me.id)
 
 const name = process.env['MATTERMOST_BOTNAME'] || '@chatgpt'
-const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST'].split(',') : []
+const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST_USER'].split(',') : []
 const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'].split(',') : []
 
 const VISUALIZE_DIAGRAM_INSTRUCTIONS = "When a user asks for a visualization of entities and relationships, respond with a valid JSON object text in a <GRAPH> tag. " +
