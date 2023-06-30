@@ -19,6 +19,8 @@ let meId = null;
 mmClient.getMe().then(me => meId = me.id)
 
 const name = process.env['MATTERMOST_BOTNAME'] || '@chatgpt'
+const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST'].split(',') : []
+const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'].split(',') : []
 
 const VISUALIZE_DIAGRAM_INSTRUCTIONS = "When a user asks for a visualization of entities and relationships, respond with a valid JSON object text in a <GRAPH> tag. " +
     "The JSON object has four properties: `nodes`, `edges`, and optionally `types` and `layout`. " +
@@ -48,6 +50,18 @@ wsClient.addMessageListener(async function (event) {
                         "content": `You are a helpful assistant named ${name} who provides succinct answers in Markdown format.`
                     },
                 ]
+
+                // If not in whitelist, return hold message
+                if((whiteListUser.length !== 0 && !whiteListUser.includes(post.user_id))
+                    && whiteListChannel.length !== 0 && !whiteListChannel.includes(post.channel_id)){
+                        const newPost = await mmClient.createPost({
+                            message: 'Sorry, you are not in the whitelist or you can not use this bot in this channel, please contact the system administrator.',
+                            channel_id: post.channel_id,
+                            root_id: post.root_id || post.id,
+                        })
+                        log.info({msg: newPost})
+                        return
+                }
 
                 let appendDiagramInstructions = false
 
