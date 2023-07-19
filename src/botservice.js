@@ -87,9 +87,9 @@ wsClient.addMessageListener(async function (event) {
                     // If not in whitelist, return hold message
                     if(!whiteListUser.includes(post.user_id) && !whiteListChannel.includes(post.channel_id)){
                         const newPost = await mmClient.createPost({
-                            message: 'Sorry, you are not in the whitelist or you can not use this bot in this channel, please contact the system administrator.\n'+
-                                    '抱歉，您不在白名单中，或者您无法在此频道使用该机器人，请联系系统管理员。\n'+
-                                    '申し訳ありませんが、ホワイトリストに登録されていないか、このチャンネルではこのボットを使用することができません。システム管理者に連絡してください。',
+                            message: 'Sorry, according to department policy, you are currently unable to use this feature. Please contact the system administrator.\n'+
+                                    '很抱歉，根据部门政策，您暂时无法使用这个功能，请联系系统管理员。\n'+
+                                    '申し訳ありませんが、部門のポリシーに基づき、現時点ではこの機能を使用することはできません。システム管理者に連絡してください。',
                             channel_id: post.channel_id,
                             root_id: post.root_id || post.id,
                         })
