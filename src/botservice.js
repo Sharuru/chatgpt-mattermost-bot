@@ -86,14 +86,15 @@ wsClient.addMessageListener(async function (event) {
                     // we are trigged, but before that check whitelist
                     // If not in whitelist, return hold message
                     if(!whiteListUser.includes(post.user_id) && !whiteListChannel.includes(post.channel_id)){
-                        const newPost = await mmClient.createPost({
-                            message: 'Sorry, according to department policy, you are currently unable to use this feature. Please contact the system administrator.\n'+
-                                    '很抱歉，根据部门政策，您暂时无法使用这个功能，请联系系统管理员。\n'+
-                                    '申し訳ありませんが、部門のポリシーに基づき、現時点ではこの機能を使用することはできません。システム管理者に連絡してください。',
-                            channel_id: post.channel_id,
-                            root_id: post.root_id || post.id,
-                        })
-                        log.info({msg: newPost})
+                        // do nothing
+                        // const newPost = await mmClient.createPost({
+                        //     message: 'Sorry, according to department policy, you are currently unable to use this feature. Please contact the system administrator.\n'+
+                        //             '很抱歉，根据部门政策，您暂时无法使用这个功能，请联系系统管理员。\n'+
+                        //             '申し訳ありませんが、部門のポリシーに基づき、現時点ではこの機能を使用することはできません。システム管理者に連絡してください。',
+                        //     channel_id: post.channel_id,
+                        //     root_id: post.root_id || post.id,
+                        // })
+                        // log.info({msg: newPost})
                     }
                     else {
                         const typing = () => wsClient.userTyping(post.channel_id, (post.root_id || post.id) ?? "")
