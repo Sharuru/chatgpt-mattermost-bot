@@ -24,8 +24,8 @@ const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? proce
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
 const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个乐于助人的助手。" + 
 "当用户向你寻求帮助时，你将使用 Markdown 格式提供简洁的答案。" + 
-"你可以从消息中获知用户的名字。通常在我的名字叫之后，请记住始终使用与收到请求相同的语言回复。" + 
-"例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言的请求，始终使用中文回复。"
+"你可以从消息中获知用户的名字。通常在我的名字叫之后的方括号里，请记住始终使用与收到请求相同的语种进行回复。" + 
+"例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言或不确信的请求，始终使用中文回复。"
 
 const plugins: PluginBase<any>[] = [
     new GraphPlugin("graph-plugin", "Generate a graph based on a given description or topic"),
@@ -66,11 +66,11 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
                 content: threadPost.props.originalMessage ?? threadPost.message
             })
         } else {
-            const userName = await getUserTrueName(threadPost.user_id);
+            const friendlyName = await getUserFriendlyName(threadPost.user_id);
             chatmessages.push({
                 role: 'user',
                 name: await userIdToName(threadPost.user_id),
-                content: `我的名字叫：${userName} ${threadPost.message}`
+                content: `我的名字叫：[${friendlyName}] ${threadPost.message}`
             })
         }
     }
@@ -217,13 +217,13 @@ async function userIdToName(userId: string): Promise<string> {
     return username
 }
 
-const userTrueNameCache: Record<string, { username: string, expireTime: number }> = {}
-async function getUserTrueName(userId: string): Promise<string> {
+const userFriendlyNameCache: Record<string, { username: string, expireTime: number }> = {}
+async function getUserFriendlyName(userId: string): Promise<string> {
     let username: string
 
     // check if userId is in cache and not outdated
-    if (userTrueNameCache[userId] && Date.now() < userTrueNameCache[userId].expireTime) {
-        username = userTrueNameCache[userId].username
+    if (userFriendlyNameCache[userId] && Date.now() < userFriendlyNameCache[userId].expireTime) {
+        username = userFriendlyNameCache[userId].username
     } else {
         // username not in cache our outdated
         const user = await mmClient.getUser(userId);
@@ -236,7 +236,7 @@ async function getUserTrueName(userId: string): Promise<string> {
             username = user.username;
         }
 
-        userTrueNameCache[userId] = {
+        userFriendlyNameCache[userId] = {
             username: username,
             expireTime: Date.now() + 1000 * 60 * 5
         }

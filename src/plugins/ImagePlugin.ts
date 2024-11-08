@@ -15,7 +15,9 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
     "创建提示时，首先描述图像的外观和结构。其次，描述摄影风格，如相机角度、相机位置、镜头等。第三，描述光线和特定颜色。" + 
     "你的提示必须专注于整体图像，而不是描述其中的细节。" + 
     "如果用户没有提供，考虑添加一些流行词，例如'细节丰富'、'超细节'、'非常逼真'、'素描风格'、'街头艺术'、'绘画'等类似词语。" + 
-    "保持提示尽可能简单，且不超过400个字符。你只能回答生成的提示，不提供任何描述或解释，并记住使用与收到的请求相同的语种。"
+    "保持提示尽可能简单，且不超过400个字符。你只能回答生成的提示，不提供任何描述或解释。" +
+    "并记住一定要使用与收到的描述相同的语种。比如用户的描述是中文，那么你的提示也应该是中文。" +
+    "如果你无法分辨或不确信用户的描述语种，那默认使用简体中文。"
 
     setup(): boolean {
         this.addPluginArgument('imageDescription', 'string', '用户提供的描述')
@@ -65,7 +67,7 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
         ]
 
         const response = await createChatCompletion(messages)
-        // 处理 null 的情况，将其转换为 undefined
+        
         return response?.content ?? undefined
     }
 

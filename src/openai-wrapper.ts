@@ -7,7 +7,6 @@ const apiKey = process.env['OPENAI_API_KEY'];
 const basePath = process.env['OPENAI_API_BASE'];
 log.trace({apiKey, basePath});
 
-// 创建 OpenAI 实例
 const openai = new OpenAI({
     apiKey,
     baseURL: basePath
