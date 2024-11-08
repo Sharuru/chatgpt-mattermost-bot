@@ -37,7 +37,7 @@ const plugins: PluginBase<any>[] = [
 ]
 
 /* The main system instruction for GPT */
-const botInstructions = "Your name is " + name + ". " + additionalBotInstructions
+const botInstructions = "你的名字是 " + name + ". " + additionalBotInstructions
 botLog.debug({botInstructions: botInstructions})
 
 async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: string) {
@@ -200,7 +200,14 @@ async function userIdToName(userId: string): Promise<string> {
         username = usernameCache[userId].username
     } else {
         // username not in cache our outdated
-        username = (await mmClient.getUser(userId)).username
+        const user = await mmClient.getUser(userId);
+        if (user.nickname) {
+            username = user.nickname;
+        } else if (user.last_name && user.first_name) {
+            username = `${user.last_name}${user.first_name}`;
+        } else {
+            username = user.username;
+        }
 
         if (!/^[a-zA-Z0-9_-]{1,64}$/.test(username)) {
             username = username.replace(/[.@!?]/g, '_').slice(0, 64)
