@@ -25,7 +25,7 @@ const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? proce
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
 const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个乐于助人的助手。" + 
 "当用户向你寻求帮助时，你将使用 Markdown 格式提供简洁的答案。" + 
-"你可以从消息中获知用户的名字。通常在“我的名字叫”后，请记住始终使用与收到请求相同的语言回复。" + 
+"你可以从消息中获知用户的名字。通常在“我的名字叫”之后，请记住始终使用与收到请求相同的语言回复。" + 
 "例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言的请求，始终使用中文回复。"
 
 /* List of all registered plugins */
@@ -69,11 +69,11 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
                 content: threadPost.props.originalMessage ?? threadPost.message
             })
         } else {
-            chatmessages[0].content += " 我的名字叫：" + await getUserTrueName(threadPost.user_id);
+            const userName = await getUserTrueName(threadPost.user_id);
             chatmessages.push({
                 role: ChatCompletionRequestMessageRoleEnum.User,
                 name: await userIdToName(threadPost.user_id),
-                content: threadPost.message
+                content: `我的名字叫：${userName} ${threadPost.message}`
             })
         }
     }
@@ -237,14 +237,6 @@ async function getUserTrueName(userId: string): Promise<string> {
             username = `${user.last_name}${user.first_name}`;
         } else {
             username = user.username;
-        }
-
-        if (!/^[a-zA-Z0-9_-]{1,64}$/.test(username)) {
-            username = username.replace(/[.@!?]/g, '_').slice(0, 64)
-        }
-
-        if (!/^[a-zA-Z0-9_-]{1,64}$/.test(username)) {
-            username = [...username.matchAll(/[a-zA-Z0-9_-]/g)].join('').slice(0, 64)
         }
 
         userTrueNameCache[userId] = {
