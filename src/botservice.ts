@@ -23,9 +23,10 @@ const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env
 const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'].split(',') : []
 
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
-const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "You are a helpful assistant. Whenever users asks you for help you will " +
-    "provide them with succinct answers formatted using Markdown. You know the user's name as it is provided within the " +
-    "meta data of the messages."
+const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个乐于助人的助手。" + 
+"当用户向你寻求帮助时，你将使用 Markdown 格式提供简洁的答案。" + 
+"你可以从消息的元数据中获知用户的名字。请记住始终使用与收到请求相同的语言回复。" + 
+"例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言的请求，始终使用中文回复。"
 
 /* List of all registered plugins */
 const plugins: PluginBase<any>[] = [
@@ -97,7 +98,7 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
     } catch (e) {
         botLog.error(e)
         await mmClient.createPost({
-            message: "Sorry, but I encountered an internal error when trying to process your message",
+            message: "发生了内部错误",
             channel_id: msgData.post.channel_id,
             root_id: msgData.post.root_id || msgData.post.id,
         })
