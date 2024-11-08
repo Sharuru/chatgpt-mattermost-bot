@@ -201,6 +201,7 @@ async function userIdToName(userId: string): Promise<string> {
     } else {
         // username not in cache our outdated
         const user = await mmClient.getUser(userId);
+        botLog.trace("GetUserInfo: " + JSON.stringify(user));
         if (user.nickname) {
             username = user.nickname;
         } else if (user.last_name && user.first_name) {
