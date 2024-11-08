@@ -1,5 +1,5 @@
 import {PluginBase} from "./PluginBase";
-import {ChatCompletionRequestMessage, ChatCompletionRequestMessageRoleEnum} from "openai";
+import OpenAI from 'openai';
 import FormData from "form-data";
 import {mmClient} from "../mm-client";
 import {AiResponse, MessageData} from "../types";
@@ -30,7 +30,6 @@ export class GraphPlugin extends PluginBase<GraphPluginArgs> {
         "answer with something along the lines of: \"Here is the visualization:\" and then just add the tag. The user will see the rendered image, but not the JSON. " +
         "Shortly explain what the diagram is about, but do not state how you constructed the JSON. Remember, reply with the language that provide you."
 
-
     setup(): boolean {
         this.addPluginArgument('graphPrompt', 'string', 'A description or topic of the graph. This may also includes style, layout or edge properties')
 
@@ -47,13 +46,13 @@ export class GraphPlugin extends PluginBase<GraphPluginArgs> {
             message: "Sorry, I could not execute the graph plugin."
         }
 
-        const chatmessages: ChatCompletionRequestMessage[] = [
+        const chatmessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             {
-                role: ChatCompletionRequestMessageRoleEnum.System,
+                role: 'system',
                 content: this.VISUALIZE_DIAGRAM_INSTRUCTIONS
             },
             {
-                role: ChatCompletionRequestMessageRoleEnum.User,
+                role: 'user',
                 content: args.graphPrompt
             }
         ]

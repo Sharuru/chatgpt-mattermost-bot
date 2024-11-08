@@ -1,6 +1,6 @@
 import {PluginBase} from "./PluginBase";
 import {AiResponse, MessageData} from "../types";
-import {ChatCompletionRequestMessageRoleEnum} from "openai";
+import OpenAI from 'openai';
 import {createChatCompletion, createImage} from "../openai-wrapper";
 import FormData from "form-data";
 import {mmClient} from "../mm-client";
@@ -12,12 +12,10 @@ type ImagePluginArgs = {
 export class ImagePlugin extends PluginBase<ImagePluginArgs> {
     private readonly GPT_INSTRUCTIONS = "你是一位 AI 的 prompt 工程师，帮助用户为图像AI DALL-E创建优质提示。" + 
     "用户会提供简短的图像描述，你需要将其转化为合适的提示文本。" + 
-    "你的主要任务是将描述变成英文" +
-    "保持提示尽可能简单，且不超过400个字符。你只能回答生成的提示，不提供任何描述或解释" + 
-    "最后你生成的 prompt 应该是英文的，并在最后加上 " + 
-    " --version 6 --quality 1 --chaos 0 --stylize 100" +
-    " 的固定参数"
-
+    "创建提示时，首先描述图像的外观和结构。其次，描述摄影风格，如相机角度、相机位置、镜头等。第三，描述光线和特定颜色。" + 
+    "你的提示必须专注于整体图像，而不是描述其中的细节。" + 
+    "如果用户没有提供，考虑添加一些流行词，例如'细节丰富'、'超细节'、'非常逼真'、'素描风格'、'街头艺术'、'绘画'等类似词语。" + 
+    "保持提示尽可能简单，且不超过400个字符。你只能回答生成的提示，不提供任何描述或解释，并记住使用与收到的请求相同的语种。"
 
     setup(): boolean {
         this.addPluginArgument('imageDescription', 'string', '用户提供的描述')
@@ -48,26 +46,27 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
             }
         } catch (e) {
             this.log.error(e)
-            this.log.error(`The input was:\n\n${prompt}`)
+            this.log.error(`The input was:\n\n${args.imageDescription}`)
         }
 
        return aiResponse
     }
 
     async createImagePrompt(userInput: string): Promise<string | undefined> {
-        const messages = [
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             {
-                role: ChatCompletionRequestMessageRoleEnum.System,
+                role: 'system',
                 content: this.GPT_INSTRUCTIONS
             },
             {
-                role: ChatCompletionRequestMessageRoleEnum.User,
+                role: 'user',
                 content: userInput
             }
         ]
 
         const response = await createChatCompletion(messages)
-        return response?.content
+        // 处理 null 的情况，将其转换为 undefined
+        return response?.content ?? undefined
     }
 
     async base64ToFile (b64String: string, channelId: string) {

@@ -3,7 +3,7 @@ import {mmClient, wsClient} from "./mm-client";
 import 'babel-polyfill'
 import 'isomorphic-fetch'
 import {WebSocketMessage} from "@mattermost/client";
-import {ChatCompletionRequestMessage, ChatCompletionRequestMessageRoleEnum} from "openai";
+import OpenAI from 'openai';
 import {GraphPlugin} from "./plugins/GraphPlugin";
 import {ImagePlugin} from "./plugins/ImagePlugin";
 import {Post} from "@mattermost/types/lib/posts";
@@ -11,7 +11,6 @@ import {PluginBase} from "./plugins/PluginBase";
 import {JSONMessageData, MessageData} from "./types";
 import {ExitPlugin} from "./plugins/ExitPlugin";
 import {MessageCollectPlugin} from "./plugins/MessageCollectPlugin";
-
 import {botLog, matterMostLog} from "./logging";
 
 if (!global.FormData) {
@@ -25,10 +24,9 @@ const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? proce
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
 const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个乐于助人的助手。" + 
 "当用户向你寻求帮助时，你将使用 Markdown 格式提供简洁的答案。" + 
-"你可以从消息中获知用户的名字。通常在“我的名字叫”之后，请记住始终使用与收到请求相同的语言回复。" + 
+"你可以从消息中获知用户的名字。通常在我的名字叫之后，请记住始终使用与收到请求相同的语言回复。" + 
 "例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言的请求，始终使用中文回复。"
 
-/* List of all registered plugins */
 const plugins: PluginBase<any>[] = [
     new GraphPlugin("graph-plugin", "Generate a graph based on a given description or topic"),
     new ImagePlugin("image-plugin", "Generates an image based on a given image description."),
@@ -36,7 +34,6 @@ const plugins: PluginBase<any>[] = [
     new MessageCollectPlugin("message-collect-plugin", "Collects messages in the thread for a specific user or time"),
 ]
 
-/* The main system instruction for GPT */
 const botInstructions = "你的名字是 " + name + ". " + additionalBotInstructions
 botLog.debug({botInstructions: botInstructions})
 
@@ -53,9 +50,9 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
         return
     }
 
-    const chatmessages: ChatCompletionRequestMessage[] = [
+    const chatmessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         {
-            role: ChatCompletionRequestMessageRoleEnum.System,
+            role: 'system',
             content: botInstructions
         },
     ]
@@ -65,13 +62,13 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
         matterMostLog.trace({msg: threadPost})
         if (threadPost.user_id === meId) {
             chatmessages.push({
-                role: ChatCompletionRequestMessageRoleEnum.Assistant,
+                role: 'assistant',
                 content: threadPost.props.originalMessage ?? threadPost.message
             })
         } else {
             const userName = await getUserTrueName(threadPost.user_id);
             chatmessages.push({
-                role: ChatCompletionRequestMessageRoleEnum.User,
+                role: 'user',
                 name: await userIdToName(threadPost.user_id),
                 content: `我的名字叫：${userName} ${threadPost.message}`
             })
