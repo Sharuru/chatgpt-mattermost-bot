@@ -2,12 +2,15 @@
 
 ![A chat window in Mattermost showing the chat between the OpenAI bot and "yGuy"](./mattermost-chat.png)
 
-Here's how to get the bot running - it's easy if you have a Docker server.
+The bot can talk to you like a regular mattermost user. It's like having chat.openai.com built collaboratively built into Mattermost!
+But that's not all, you can also use it to generate images via Dall-E or diagram visualizations via a yFiles plugin! 
+
+Here's how to get the bot running - it's easy if you have a Docker host.
 
 You need
  - the [Mattermost token](https://docs.mattermost.com/integrations/cloud-bot-accounts.html) for the bot user (`@chatgpt` by default)
  - the [OpenAI API key](https://platform.openai.com/account/api-keys)
- - a [Docker](https://www.docker.com/) server for continuously running the service, alternatively for testing, Node.js is sufficient.
+ - a [Docker](https://www.docker.com/) server for continuously running the service, alternatively for testing, Node.js 16 is sufficient.
 
 Andrew Zigler from Mattermost created a [YouTube Video](https://www.youtube.com/watch?v=Hx4Ex7YZZiA) that quickly guides you through the setup.
 
@@ -16,21 +19,25 @@ If you want to learn more about how this plugin came to live, [read the blog pos
 
 ## Options
 
-These are the available options, you can set them as environment variables when running [the script](./src/botservice.js)
-or when [running the docker image](#using-the-ready-made-image) or when configuring your [docker-compose](#docker-compose) file.
+These are the available options, you can set them as environment variables when running [the script](./src/botservice.ts)
+or when [running the docker image](#using-the-ready-made-docker-image) or when configuring your [docker-compose](#docker-compose) file.
 
-| Name                | Required | Example Value               | Description                                                                                 |
-|---------------------|----------|-----------------------------|---------------------------------------------------------------------------------------------|
-| MATTERMOST_URL      | yes      | `https://mattermost.server` | The URL to the server. This is used for connecting the bot to the Mattermost API            |
-| MATTERMOST_TOKEN    | yes      | `abababacdcdcd`             | The authentication token from the logged in mattermost bot                                  |
-| OPENAI_API_KEY      | yes      | `sk-234234234234234234`     | The OpenAI API key to authenticate with OpenAI                                              |
-| OPENAI_MODEL_NAME   | no       | `gpt-3.5-turbo`             | The OpenAI language model to use, defaults to `gpt-3.5-turbo`                               |
-| OPENAI_MAX_TOKENS   | no       | `2000`                      | The maximum number of tokens to pass to the OpenAI API, defaults to 2000                    |
-| OPENAI_TEMPERATURE  | no       | `0.2`                       | The sampling temperature to use, between 0 and 2, defaults to 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. |
- | YFILES_SERVER_URL   | no       | `http://localhost:3835`     | The URL to the yFiles graph service for embedding auto-generated diagrams.                  |
- | NODE_EXTRA_CA_CERTS | no       | `/file/to/cert.crt`         | a link to a certificate file to pass to node.js for authenticating self-signed certificates |
- | MATTERMOST_BOTNAME  | no       | `"@chatgpt"`                | the name of the bot user in Mattermost, defaults to '@chatgpt'                              |
- | DEBUG_LEVEL         | no       | `TRACE`                     | a debug level used for logging activity, defaults to `INFO`                                 |
+| Name                 | Required | Example Value                | Description                                                                                                                                                                                        |
+|----------------------|----------|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| MATTERMOST_URL       | yes      | `https://mattermost.server`  | The URL to the server. This is used for connecting the bot to the Mattermost API                                                                                                                   |
+| MATTERMOST_TOKEN     | yes      | `abababacdcdcd`              | The authentication token from the logged in mattermost bot                                                                                                                                         |
+| OPENAI_API_KEY       | yes      | `sk-234234234234234234`      | The OpenAI API key to authenticate with OpenAI                                                                                                                                                     |
+| OPENAI_API_BASE      | no       | `http://example.com:8080/v1` | The address of an OpenAI compatible API. Overrides the default base path (`https://api.openai.com`)          |
+| OPENAI_MODEL_NAME    | no       | `gpt-3.5-turbo`              | The OpenAI language model to use, defaults to `gpt-3.5-turbo`                                                                                                                                      |
+| OPENAI_MAX_TOKENS    | no       | `2000`                       | The maximum number of tokens to pass to the OpenAI API, defaults to 2000                                                                                                                           |
+| OPENAI_TEMPERATURE   | no       | `0.2`                        | The sampling temperature to use, between 0 and 2, defaults to 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. |
+| YFILES_SERVER_URL    | no       | `http://localhost:3835`      | The URL to the yFiles graph service for embedding auto-generated diagrams.                                                                                                                         |
+| NODE_EXTRA_CA_CERTS  | no       | `/file/to/cert.crt`          | a link to a certificate file to pass to node.js for authenticating self-signed certificates                                                                                                        |
+| MATTERMOST_BOTNAME   | no       | `"@chatgpt"`                 | the name of the bot user in Mattermost, defaults to '@chatgpt'                                                                                                                                     |
+| PLUGINS              | no       | `graph-plugin, image-plugin` | The enabled plugins of the bot. By default all plugins (grpah-plugin and image-plugin) are enabled.                                                                                                |
+| DEBUG_LEVEL          | no       | `TRACE`                      | a debug level used for logging activity, defaults to `INFO`                                                                                                                                        |
+| BOT_CONTEXT_MSG      | no       | `15`                         | The number of previous messages which are appended to the conversation with ChatGPT, defaults to 100                                                                                               |
+| BOT_INSTRUCTION      | no       | `Act like Elon Musk`         | Extra instruction to give your assistance. How should the assistant behave? |
 
 > **Note**
 > The `YFILES_SERVER_URL` is used for automatically converting text information created by the bot into diagrams.
@@ -38,7 +45,7 @@ or when [running the docker image](#using-the-ready-made-image) or when configur
 > [LinkedIn Post](https://www.linkedin.com/posts/yguy_chatgpt-yfiles-diagramming-activity-7046713027005407232-2bKH)
 > If you are interested in getting your hands on the plugin, please contact [yWorks](https://www.yworks.com)!
 
-## Using the ready-made image
+## Using the ready-made Docker image
 
 Use the prebuilt image from [`ghcr.io/yguy/chatgpt-mattermost-bot`](https://ghcr.io/yguy/chatgpt-mattermost-bot)
 
@@ -51,7 +58,7 @@ docker run -d --restart unless-stopped \
   ghcr.io/yguy/chatgpt-mattermost-bot:latest
 ```
 
-## Building the docker image yourself
+## Building the Docker image manually
 
 First step is to clone this repo.
 
@@ -59,9 +66,9 @@ First step is to clone this repo.
 git clone https://github.com/yGuy/chatgpt-mattermost-bot.git && cd chatgpt-mattermost-bot
 ```
 
-For testing, you could now just run `npm install` and `npm run start` or `node src/botservice.js` directly, but be sure to set the [environment variables](#options) or pass them to the node process, first!
+For testing, you could now just run `npm install` and `npm run start` directly, but be sure to set the [environment variables](#options)  or pass them to the node process, first! 
 
-For production use, in order to create a service on a docker container that will always provide the service without you having to run it on your own PC, you can do the following:
+For production use, in order to create a service on a docker container that will always provide the service without you having to run it on your own machine, you can do the following:
 
 Build the docker image from the [Dockerfile](./Dockerfile):
 ```bash
@@ -143,7 +150,7 @@ services:
       NODE_EXTRA_CA_CERTS: /certs/certfile.crt
 ```
 
-### Run the container as a daemon
+### Run the container as a service
 When all configuration is complete, start the container service.
 ```bash
 docker compose up -d
@@ -160,6 +167,18 @@ docker compose down
 ```
 
 
+## Deploy to Kubernetes with Helm
+The chatgpt-mattermost-bot chart deploys a containerized chatgpt-mattermost-bot instance which will connect to a running mattermost container in the same kubernetes cluster.  Chart uses 'mattermost-team-edition' and the 'mattermost' namespace by default.  Uses environment variables MATTERMOST_TOKEN and OPENAI_API_KEY. 
+```bash
+helm upgrade chatgpt-mattermost-bot ./helm/chatgpt-mattermost-bot \
+  --create-namespace \
+  --install \
+  -n mattermost \
+  -f ./helm/chatgpt-mattermost-bot/values.yaml \
+  --set config.MATTERMOST_TOKEN="$MATTERMOST_TOKEN" \
+  --set config.OPENAI_API_KEY="$OPENAI_API_KEY"
+```
+
 ## Example Conversation
 
 Here's an example chat that I just had with our bot:
@@ -170,10 +189,10 @@ Here's an example chat that I just had with our bot:
 >chatgpt (BOT):
 >>Hello there! I'm @chatgpt, a friendly and reliable Mattermost bot designed to make your communication experience smoother and more efficient. I'm honored to be part of the team at yWorks, where I help employees get things done faster and with less hassle. With my advanced machine learning algorithms, I'm capable of understanding complex natural language queries and providing succinct and accurate responses in a matter of seconds. Whether you're a developer looking for information on your codebase or a manager seeking to streamline your team's workflows, I'm here to help. Installing a Mattermost chatbot like me is a must for any organization looking to boost its productivity and enjoy a more pleasant communication experience. So what are you waiting for? Let's chat!
 
-I built this tool as a quick hack on a rainy Saturday afternoon, but we are using the bot in production in our Mattermost instance at our office at [yworks](https://www.yworks.com) and the bot has proved to be very helpful for many simple tasks. Give it a try and provide feedback if you like! It's really not very expensive: We had it runnning for about 30 users for two weeks and that cost us less than half a dollar for the ChatGPT service! 
+I built this tool as a quick hack on a rainy Saturday afternoon, but we are using the bot in production in our Mattermost instance at our office at [yworks](https://www.yworks.com) and the bot has proved to be very helpful for many simple tasks. Give it a try and provide feedback if you like! It's really not very expensive: We had it running for about 30 users for two weeks and that cost us less than half a dollar for the ChatGPT service! 
 
 I will also accept helpful pull requests if you find an issue or have an idea for an improvement.
 
 Last but not least, check out [yWorks](https://www.yworks.com)' fine diagramming SDKs for software developers [yFiles](https://yworks.com/yfiles) and our [free online graph and diagram editors](https://yworks.com/editors)!
 
-This is under MIT license Copyright (c) 2023 Sebastian Mueller (yWorks)
+This is under MIT license Copyright (c) 2023 Sebastian Mueller (yWorks) and Michael Haeglsperger (yWorks)
