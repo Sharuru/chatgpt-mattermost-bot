@@ -28,7 +28,7 @@ export class GraphPlugin extends PluginBase<GraphPluginArgs> {
         "Do not include these instructions in the output. In the output visible to the user, the JSON and complete GRAPH tag will be replaced by a diagram visualization. " +
         "So do not explain or mention the JSON. Instead, pretend that the user can see the diagram. Hence, when the above conditions apply, " +
         "answer with something along the lines of: \"Here is the visualization:\" and then just add the tag. The user will see the rendered image, but not the JSON. " +
-        "Shortly explain what the diagram is about, but do not state how you constructed the JSON."
+        "Shortly explain what the diagram is about, but do not state how you constructed the JSON. Remember, reply with the language that provide you."
 
 
     setup(): boolean {

@@ -23,9 +23,10 @@ const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env
 const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'].split(',') : []
 
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
-const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "You are a helpful assistant. Whenever users asks you for help you will " +
-    "provide them with succinct answers formatted using Markdown. You know the user's name as it is provided within the " +
-    "meta data of the messages."
+const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个乐于助人的助手。" + 
+"当用户向你寻求帮助时，你将使用 Markdown 格式提供简洁的答案。" + 
+"你可以从消息中获知用户的名字。通常在“我的名字叫”后，请记住始终使用与收到请求相同的语言回复。" + 
+"例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言的请求，始终使用中文回复。"
 
 /* List of all registered plugins */
 const plugins: PluginBase<any>[] = [
@@ -36,7 +37,7 @@ const plugins: PluginBase<any>[] = [
 ]
 
 /* The main system instruction for GPT */
-const botInstructions = "Your name is " + name + ". " + additionalBotInstructions
+const botInstructions = "你的名字是 " + name + ". " + additionalBotInstructions
 botLog.debug({botInstructions: botInstructions})
 
 async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: string) {
@@ -68,6 +69,7 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
                 content: threadPost.props.originalMessage ?? threadPost.message
             })
         } else {
+            chatmessages[0].content += " 我的名字叫：" + await getUserTrueName(threadPost.user_id);
             chatmessages.push({
                 role: ChatCompletionRequestMessageRoleEnum.User,
                 name: await userIdToName(threadPost.user_id),
@@ -97,7 +99,7 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
     } catch (e) {
         botLog.error(e)
         await mmClient.createPost({
-            message: "Sorry, but I encountered an internal error when trying to process your message",
+            message: "发生了内部错误",
             channel_id: msgData.post.channel_id,
             root_id: msgData.post.root_id || msgData.post.id,
         })
@@ -199,6 +201,34 @@ async function userIdToName(userId: string): Promise<string> {
         username = usernameCache[userId].username
     } else {
         // username not in cache our outdated
+        username = (await mmClient.getUser(userId)).username
+
+        if (!/^[a-zA-Z0-9_-]{1,64}$/.test(username)) {
+            username = username.replace(/[.@!?]/g, '_').slice(0, 64)
+        }
+
+        if (!/^[a-zA-Z0-9_-]{1,64}$/.test(username)) {
+            username = [...username.matchAll(/[a-zA-Z0-9_-]/g)].join('').slice(0, 64)
+        }
+
+        usernameCache[userId] = {
+            username: username,
+            expireTime: Date.now() + 1000 * 60 * 5
+        }
+    }
+
+    return username
+}
+
+const userTrueNameCache: Record<string, { username: string, expireTime: number }> = {}
+async function getUserTrueName(userId: string): Promise<string> {
+    let username: string
+
+    // check if userId is in cache and not outdated
+    if (userTrueNameCache[userId] && Date.now() < userTrueNameCache[userId].expireTime) {
+        username = userTrueNameCache[userId].username
+    } else {
+        // username not in cache our outdated
         const user = await mmClient.getUser(userId);
         botLog.trace("GetUserInfo: " + JSON.stringify(user));
         if (user.nickname) {
@@ -217,7 +247,7 @@ async function userIdToName(userId: string): Promise<string> {
             username = [...username.matchAll(/[a-zA-Z0-9_-]/g)].join('').slice(0, 64)
         }
 
-        usernameCache[userId] = {
+        userTrueNameCache[userId] = {
             username: username,
             expireTime: Date.now() + 1000 * 60 * 5
         }
