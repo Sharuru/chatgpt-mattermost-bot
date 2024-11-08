@@ -19,6 +19,9 @@ if (!global.FormData) {
 }
 
 const name = process.env['MATTERMOST_BOTNAME'] || '@chatgpt'
+const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST_USER'].split(',') : []
+const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'].split(',') : []
+
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
 const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "You are a helpful assistant. Whenever users asks you for help you will " +
     "provide them with succinct answers formatted using Markdown. You know the user's name as it is provided within the " +
@@ -122,6 +125,11 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
     if (msgData.post.user_id === meId) {
         return true
     }
+
+    // not in whitelist
+    if(!whiteListUser.includes(msgData.post.user_id) && !whiteListChannel.includes(msgData.post.channel_id)){
+        return true
+    } 
 
     for (let i = previousPosts.length - 1; i >= 0; i--) {
         // we were asked to stop participating in the conversation

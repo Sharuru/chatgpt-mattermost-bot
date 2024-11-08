@@ -10,13 +10,14 @@
     "@mattermost/client": "^7.10.0",
     "@mattermost/types": "^7.10.0",
     "babel-polyfill": "^6.26.0",
+    "chatgpt-mattermost-bot": "file:",
     "debug-level": "3.0.0",
     "form-data": "^4.0.0",
     "isomorphic-fetch": "^3.0.0",
     "openai": "^3.3.0",
-    "ws": "^8.12.1",
     "ts-node": "^10.9.1",
-    "typescript": "^4.9.5"
+    "typescript": "^4.9.5",
+    "ws": "^8.12.1"
   },
   "devDependencies": {
     "@types/ws": "^8.5.5"
