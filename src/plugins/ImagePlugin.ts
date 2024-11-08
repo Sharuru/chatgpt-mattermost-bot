@@ -17,7 +17,7 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
         "lighting and specific colors. Your prompt have to focus on the overall image and not describe any details " +
         "on it. Consider adding buzzwords, for example 'detailed', 'hyper-detailed', 'very realistic', 'sketchy', " +
         "'street-art', 'drawing', or similar words. Keep the prompt as simple as possible and never get longer than " +
-        "400 characters. You may only answer with the resulting prompt and provide no description or explanations and remember to using with the same language that provide you."
+        "400 characters. You may only answer with the resulting prompt and provide no description or explanations."
 
 
     setup(): boolean {
@@ -42,8 +42,8 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
                 const base64Image = await createImage(imagePrompt)
                 if(base64Image) {
                     const fileId = await this.base64ToFile(base64Image, msgData.post.channel_id)
-                    aiResponse.message = "" + imagePrompt
-                    aiResponse.props = {originalMessage: "<IMAGE>" + imagePrompt + "</IMAGE>"}
+                    aiResponse.message = "Here is the image you requested: " + imagePrompt
+                    aiResponse.props = {originalMessage: "Sure here is the image you requested. <IMAGE>" + imagePrompt + "</IMAGE>"}
                     aiResponse.fileId = fileId
                 }
             }
