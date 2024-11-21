@@ -136,7 +136,7 @@ export async function createImage(prompt: string): Promise<string | undefined> {
             size: '1024x1024',
             response_format: 'b64_json'
         });
-        let imageLog = {image};
+        let imageLog = JSON.parse(JSON.stringify({image}));
         imageLog.image.data[0].b64_json = 'OMITTED';
         log.trace({imageLog});
         return image.data[0].b64_json;
