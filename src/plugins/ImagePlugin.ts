@@ -16,7 +16,6 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
     "你的提示必须专注于整体图像，而不是描述其中的细节。" + 
     "如果用户没有提供，考虑添加一些流行词，例如'细节丰富'、'超细节'、'非常逼真'、'素描风格'、'街头艺术'、'绘画'等类似词语。" + 
     "保持提示尽可能简单，且不超过400个字符。你只能回答生成的提示，不提供任何描述或解释。" +
-    "当然，如果用户的描述以【无需帮助】开头，那么你就不要进行任何转化处理，去除掉【无需帮助】后直接将剩余内容作为转化后的提示即可。" +
     "并记住一定要使用与收到的描述相同的语种。比如用户的描述是中文，那么你的提示也应该是中文。" +
     "如果你无法分辨或不确信用户的描述语种，那默认使用简体中文。"
 
@@ -56,20 +55,24 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
     }
 
     async createImagePrompt(userInput: string): Promise<string | undefined> {
-        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-            {
-                role: 'system',
-                content: this.GPT_INSTRUCTIONS
-            },
-            {
-                role: 'user',
-                content: userInput
-            }
-        ]
-
-        const response = await createChatCompletion(messages)
-        
-        return response?.content ?? undefined
+        if(userInput.startsWith("【无需帮助】")){
+            return userInput.replace("【无需帮助】", "");
+        } else {
+            const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+                {
+                    role: 'system',
+                    content: this.GPT_INSTRUCTIONS
+                },
+                {
+                    role: 'user',
+                    content: userInput
+                }
+            ]
+    
+            const response = await createChatCompletion(messages)
+            
+            return response?.content ?? undefined
+        }
     }
 
     async base64ToFile (b64String: string, channelId: string) {
