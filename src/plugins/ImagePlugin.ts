@@ -35,7 +35,13 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
         }
 
         try {
-            const imagePrompt = await this.createImagePrompt(args.imageDescription)
+            let imagePrompt;
+            const msgText = msgData.post.message;
+            if(msgText.includes("【无需帮助】")) {
+                imagePrompt = msgText.split("【无需帮助】")[1];
+            } else {
+                imagePrompt = await this.createImagePrompt(args.imageDescription)
+            }
             if(imagePrompt) {
                 this.log.trace({imageInputPrompt: args.imageDescription, imageOutputPrompt: imagePrompt})
                 const base64Image = await createImage(imagePrompt)
@@ -55,24 +61,20 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
     }
 
     async createImagePrompt(userInput: string): Promise<string | undefined> {
-        if(userInput.startsWith("【无需帮助】")){
-            return userInput.replace("【无需帮助】", "");
-        } else {
-            const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-                {
-                    role: 'system',
-                    content: this.GPT_INSTRUCTIONS
-                },
-                {
-                    role: 'user',
-                    content: userInput
-                }
-            ]
-    
-            const response = await createChatCompletion(messages)
-            
-            return response?.content ?? undefined
-        }
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            {
+                role: 'system',
+                content: this.GPT_INSTRUCTIONS
+            },
+            {
+                role: 'user',
+                content: userInput
+            }
+        ]
+
+        const response = await createChatCompletion(messages)
+        
+        return response?.content ?? undefined
     }
 
     async base64ToFile (b64String: string, channelId: string) {
