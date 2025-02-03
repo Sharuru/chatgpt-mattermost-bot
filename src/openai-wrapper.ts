@@ -87,7 +87,10 @@ export async function continueThread(
                     aiResponse.message = `Sorry, but it seems there was an error when using the plugin \`\`\`${pluginName}\`\`\`.`;
                 }
             } else if(responseMessage.content) {
-                aiResponse.message = responseMessage.content;
+                // filter think blocks
+                let content = responseMessage.content;
+                content = content.replace(/<think>[\s\S]*?<\/think>\n\n/g, '');
+                aiResponse.message = content;
             }
         }
 
