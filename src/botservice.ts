@@ -20,6 +20,7 @@ if (!global.FormData) {
 const name = process.env['MATTERMOST_BOTNAME'] || '@chatgpt'
 const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST_USER'].split(',') : []
 const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'].split(',') : []
+const blackListUser = process.env['MATTERMOST_BOT_BLACKLIST_USER'] ? process.env['MATTERMOST_BOT_BLACKLIST_USER'].split(',') : []
 
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
 const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个乐于助人的助手。" + 
@@ -122,6 +123,20 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
 
     // it is our own message
     if (msgData.post.user_id === meId) {
+        return true
+    }
+
+    // check if user is in blacklist
+    if (blackListUser.includes(msgData.post.user_id)) {
+        return true
+    }
+
+    // check if any blacklisted user is mentioned in the thread
+    const threadMentions = previousPosts.flatMap(post => {
+        const postData = post.props?.mentions ? JSON.parse(post.props.mentions) : []
+        return postData
+    })
+    if (threadMentions.some(userId => blackListUser.includes(userId))) {
         return true
     }
 
