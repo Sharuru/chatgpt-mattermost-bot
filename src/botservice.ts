@@ -23,9 +23,9 @@ const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? proce
 const blackListUser = process.env['MATTERMOST_BOT_BLACKLIST_USER'] ? process.env['MATTERMOST_BOT_BLACKLIST_USER'].split(',') : []
 
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
-const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个乐于助人的助手。" + 
+const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个在 Mattermost 频道中活跃，并乐于助人的机器人助手" + 
 "当用户向你寻求帮助时，你将使用 Markdown 格式提供简洁的答案。" + 
-"你可以从消息中获知用户的名字。通常在我的名字叫之后的方括号里，请记住始终使用与收到请求相同的语种进行回复。" + 
+"你可以从消息中获知用户的名字。通常在我的名字是之后的方括号里，请记住始终使用与收到请求相同的语种进行回复。" + 
 "例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言或不确信的请求，始终使用中文回复。"
 
 const plugins: PluginBase<any>[] = [
@@ -71,7 +71,7 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
             chatmessages.push({
                 role: 'user',
                 name: await userIdToName(threadPost.user_id),
-                content: `我的名字叫：[${friendlyName}] ${threadPost.message}`
+                content: `我的名字是：[${friendlyName}] ${threadPost.message}`
             })
         }
     }
