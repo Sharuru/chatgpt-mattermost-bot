@@ -89,7 +89,14 @@ export async function continueThread(
             } else if(responseMessage.content) {
                 // filter think blocks
                 let content = responseMessage.content;
-                content = content.replace(/<think>[\s\S]*?<\/think>\n\n/g, '');
+                
+                // Replace everything before and including </think> and the two newlines after it
+                if (content.includes('</think>')) {
+                    log.trace("Removing think block");
+                    content = content.split('</think>\n\n')[1];
+                    log.trace("New content: " + content);
+                }
+                
                 aiResponse.message = content;
             }
         }
