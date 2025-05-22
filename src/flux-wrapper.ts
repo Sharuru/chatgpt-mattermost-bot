@@ -84,16 +84,29 @@ export async function createFluxImage(prompt: string): Promise<string | undefine
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorText = await response.text();
+            log.error('Flux API error response:', { status: response.status, error: errorText });
+            throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
         }
 
         const data = await response.json();
-        log.trace({data: { ...data, b64_json: 'OMITTED' }});
+        log.debug('Flux API response:', { 
+            status: response.status,
+            hasData: !!data,
+            dataKeys: Object.keys(data),
+            hasOutputs: !!data.data?.outputs
+        });
         
-        if (data.b64_json) {
-            return data.b64_json;
+        if (data.data?.outputs?.[0]?.b64_json) {
+            // 处理图片数据
+            const b64Data = data.data.outputs[0].b64_json;
+            if (b64Data.startsWith('data:image/')) {
+                return b64Data.split(',')[1];
+            }
+            return b64Data;
         } else {
-            throw new Error('No image data received from Flux API');
+            log.error('Invalid Flux API response:', { data });
+            throw new Error('No image data received from Flux API. Response: ' + JSON.stringify(data));
         }
     } catch (error) {
         log.error('Error creating image with Flux:', error);
