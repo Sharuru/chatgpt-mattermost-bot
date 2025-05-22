@@ -12,7 +12,7 @@ const openai = new OpenAI({
     baseURL: basePath
 });
 
-const model = process.env['OPENAI_MODEL_NAME'] ?? 'gpt-3.5-turbo';
+const model = process.env['OPENAI_MODEL_NAME'] ?? 'gpt-4.1';
 const max_tokens = Number(process.env['OPENAI_MAX_TOKENS'] ?? 2000);
 const temperature = Number(process.env['OPENAI_TEMPERATURE'] ?? 1);
 
