@@ -13,10 +13,13 @@ const openai = new OpenAI({
 });
 
 const model = process.env['OPENAI_MODEL_NAME'] ?? 'gpt-4.1';
-const max_tokens = Number(process.env['OPENAI_MAX_TOKENS'] ?? 2000);
+const max_tokens = Number(process.env['OPENAI_MAX_TOKENS'] ?? 8192);
 const temperature = Number(process.env['OPENAI_TEMPERATURE'] ?? 1);
 
-log.debug({model, max_tokens, temperature});
+// Image generation service selection
+const imageService = process.env['IMAGE_SERVICE'] ?? 'flux';
+
+log.debug({model, max_tokens, temperature, imageService});
 
 const plugins: Map<string, PluginBase<any>> = new Map();
 const functions: OpenAI.Chat.ChatCompletionCreateParams.Function[] = [];
@@ -137,6 +140,12 @@ export async function createChatCompletion(
 
 export async function createImage(prompt: string): Promise<string | undefined> {
     try {
+        if (imageService === 'flux') {
+            const { createFluxImage } = await import('./flux-wrapper');
+            return await createFluxImage(prompt);
+        }
+
+        // Default to DALL-E-3
         const image = await openai.images.generate({
             model: "dall-e-3",
             prompt,
