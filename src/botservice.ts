@@ -4,7 +4,6 @@ import 'babel-polyfill'
 import 'isomorphic-fetch'
 import {WebSocketMessage} from "@mattermost/client";
 import OpenAI from 'openai';
-import {GraphPlugin} from "./plugins/GraphPlugin";
 import {ImagePlugin} from "./plugins/ImagePlugin";
 import {Post} from "@mattermost/types/lib/posts";
 import {PluginBase} from "./plugins/PluginBase";
@@ -31,7 +30,6 @@ const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一�
 "例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言或不确信的请求，始终使用中文回复。"
 
 const plugins: PluginBase<any>[] = [
-    new GraphPlugin("graph-plugin", "Generate a graph based on a given description or topic"),
     new ImagePlugin("image-plugin", "Generates an image based on a given image description."),
     new ExitPlugin("exit-plugin", "Says goodbye to the user and wish him a good day."),
     new MessageCollectPlugin("message-collect-plugin", "Collects messages in the thread for a specific user or time"),

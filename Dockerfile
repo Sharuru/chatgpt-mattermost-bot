@@ -15,7 +15,7 @@ WORKDIR /app
 
 ARG NODE_ENV=production
 ENV NODE_ENV $NODE_ENV
-ENV PLUGINS=image-plugin,graph-plugin
+ENV PLUGINS=image-plugin
 
 # Avoid running as root:
 USER node
