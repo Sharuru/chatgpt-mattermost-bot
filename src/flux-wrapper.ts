@@ -3,6 +3,7 @@ import {openAILog as log} from "./logging";
 // Flux API configuration
 const fluxApiUrl = process.env['FLUX_API_URL'] ?? 'https://c-z0-api-01.hash070.com/api/v1/ai/draw/flux/pro-ultra-11';
 const fluxModel = process.env['FLUX_MODEL'] ?? 'flux-1.1-pro-ultra';
+const fluxApiKey = process.env['FLUX_API_KEY'];
 
 // Supported aspect ratios
 const aspectRatios = {
@@ -67,11 +68,18 @@ export async function createFluxImage(prompt: string): Promise<string | undefine
             params.aspect_ratio = aspectRatio;
         }
 
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        };
+
+        // Add API key to headers if available
+        if (fluxApiKey) {
+            headers['Authorization'] = `Bearer ${fluxApiKey}`;
+        }
+
         const response = await fetch(fluxApiUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
+            headers,
             body: new URLSearchParams(params)
         });
 
