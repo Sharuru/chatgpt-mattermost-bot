@@ -4,6 +4,12 @@ import {PluginBase} from "./plugins/PluginBase";
 import {AiResponse, MessageData} from "./types";
 import 'isomorphic-fetch';
 
+// Add Blob polyfill for Node.js environments
+if (typeof global.Blob === 'undefined') {
+    const { Blob } = require('buffer');
+    global.Blob = Blob;
+}
+
 const apiKey = process.env['OPENAI_API_KEY'];
 const basePath = process.env['OPENAI_API_BASE'];
 log.trace({apiKey, basePath});

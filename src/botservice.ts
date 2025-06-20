@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {continueThread, registerChatPlugin} from "./openai-wrapper";
 import {mmClient, wsClient} from "./mm-client";
 import 'babel-polyfill'
