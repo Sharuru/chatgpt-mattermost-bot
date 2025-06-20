@@ -16,10 +16,9 @@ const model = process.env['OPENAI_MODEL_NAME'] ?? 'gpt-4.1';
 const max_tokens = Number(process.env['OPENAI_MAX_TOKENS'] ?? 8192);
 const temperature = Number(process.env['OPENAI_TEMPERATURE'] ?? 1);
 
-// Image generation service selection
-const imageService = process.env['IMAGE_SERVICE'] ?? 'flux';
-
-log.debug({model, max_tokens, temperature, imageService});
+// Image generation configuration
+const imageQuality = (process.env['OPENAI_IMAGE_QUALITY'] ?? 'auto') as 'medium' | 'auto' | 'standard' | 'hd' | 'low' | 'high';
+log.debug({model, max_tokens, temperature, imageQuality});
 
 const plugins: Map<string, PluginBase<any>> = new Map();
 const functions: OpenAI.Chat.ChatCompletionCreateParams.Function[] = [];
@@ -140,24 +139,32 @@ export async function createChatCompletion(
 
 export async function createImage(prompt: string): Promise<string | undefined> {
     try {
-        if (imageService === 'flux') {
-            const { createFluxImage } = await import('./flux-wrapper');
-            return await createFluxImage(prompt);
-        }
-
-        // Default to DALL-E-3
+        // Use GPT-IMAGE-1 for image generation
         const image = await openai.images.generate({
-            model: "dall-e-3",
+            model: "gpt-image-1",
             prompt,
-            n: 1,
-            quality: 'standard',
-            style: 'vivid',
+            quality: imageQuality,
             size: '1024x1024',
+            n: 1,
             response_format: 'b64_json'
         });
-        let imageLog = JSON.parse(JSON.stringify({image}));
-        imageLog.image.data[0].b64_json = 'OMITTED';
-        log.trace({imageLog});
+        
+        // Check if image data exists
+        if (!image.data || image.data.length === 0) {
+            log.error('No image data returned from API');
+            return undefined;
+        }
+        
+        // Create a safe copy for logging without the base64 data
+        const safeImageForLogging = {
+            ...image,
+            data: image.data.map(item => ({
+                ...item,
+                b64_json: item.b64_json ? 'OMITTED' : undefined
+            }))
+        };
+        log.trace({ image: safeImageForLogging });
+        
         return image.data[0].b64_json;
     } catch (error) {
         log.error('Error creating image:', error);
