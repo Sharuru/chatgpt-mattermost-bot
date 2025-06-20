@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import {openAILog as log} from "./logging";
 import {PluginBase} from "./plugins/PluginBase";
 import {AiResponse, MessageData} from "./types";
+import 'isomorphic-fetch';
 
 const apiKey = process.env['OPENAI_API_KEY'];
 const basePath = process.env['OPENAI_API_BASE'];
@@ -9,7 +10,8 @@ log.trace({apiKey, basePath});
 
 const openai = new OpenAI({
     apiKey,
-    baseURL: basePath
+    baseURL: basePath,
+    fetch: fetch
 });
 
 const model = process.env['OPENAI_MODEL_NAME'] ?? 'gpt-4.1';
