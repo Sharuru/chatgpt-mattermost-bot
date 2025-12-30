@@ -170,20 +170,6 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
             // we are in a thread were we are actively participating => respond
             return false
         }
-
-        // check if bot was mentioned in this post
-        // Mattermost stores mentions in props.mentions as a JSON string array
-        if (previousPosts[i].props?.mentions) {
-            try {
-                const postMentions = JSON.parse(previousPosts[i].props.mentions)
-                if (postMentions.includes(meId)) {
-                    // we were mentioned in the thread => respond
-                    return false
-                }
-            } catch {
-                // if parsing fails, ignore and continue
-            }
-        }
     }
 
     // we are in a thread but did not participate or got mentioned - we should ignore this message
