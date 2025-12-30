@@ -21,6 +21,7 @@ const name = process.env['MATTERMOST_BOTNAME'] || '@chatgpt'
 const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST_USER'].split(',') : []
 const whiteListChannel = process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'] ? process.env['MATTERMOST_BOT_WHITELIST_CHANNEL'].split(',') : []
 const blackListUser = process.env['MATTERMOST_BOT_BLACKLIST_USER'] ? process.env['MATTERMOST_BOT_BLACKLIST_USER'].split(',') : []
+const blackListChannel = process.env['MATTERMOST_BOT_BLACKLIST_CHANNEL'] ? process.env['MATTERMOST_BOT_BLACKLIST_CHANNEL'].split(',') : []
 
 const contextMsgCount = Number(process.env['BOT_CONTEXT_MSG'] ?? 100)
 const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一个在 Mattermost 频道中乐于助人的助手。" + 
@@ -129,6 +130,11 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
 
     // check if user is in blacklist
     if (blackListUser.includes(msgData.post.user_id)) {
+        return true
+    }
+
+    // check if channel is in blacklist
+    if (blackListChannel.includes(msgData.post.channel_id)) {
         return true
     }
 
