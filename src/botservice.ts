@@ -141,9 +141,17 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
         return true
     }
 
-    // not in whitelist
-    if(!whiteListUser.includes(msgData.post.user_id) && !whiteListChannel.includes(msgData.post.channel_id)){
-        return true
+    // not in whitelist (only check if whitelist is configured)
+    const hasUserWhitelist = whiteListUser.length > 0
+    const hasChannelWhitelist = whiteListChannel.length > 0
+
+    if (hasUserWhitelist || hasChannelWhitelist) {
+        const userAllowed = !hasUserWhitelist || whiteListUser.includes(msgData.post.user_id)
+        const channelAllowed = !hasChannelWhitelist || whiteListChannel.includes(msgData.post.channel_id)
+
+        if (!userAllowed && !channelAllowed) {
+            return true
+        }
     } 
 
     for (let i = previousPosts.length - 1; i >= 0; i--) {
