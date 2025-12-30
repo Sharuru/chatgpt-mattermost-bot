@@ -166,8 +166,8 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
             return true
         }
 
-        if (previousPosts[i].user_id === meId) {
-            // we are in a thread were we are actively participating => respond
+        if (previousPosts[i].user_id === meId || previousPosts[i].message.includes(name)) {
+            // we are in a thread were we are actively participating, or we were mentioned in the thread => respond
             return false
         }
     }
