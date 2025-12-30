@@ -160,7 +160,11 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
             return true
         }
 
-        if (previousPosts[i].user_id === meId || previousPosts[i].message.includes(name)) {
+        // check if bot was mentioned in this post
+        const postMentions = previousPosts[i].props?.mentions ? JSON.parse(previousPosts[i].props.mentions) : []
+        const botWasMentioned = postMentions.includes(meId)
+
+        if (previousPosts[i].user_id === meId || botWasMentioned) {
             // we are in a thread were we are actively participating, or we were mentioned in the thread => respond
             return false
         }
