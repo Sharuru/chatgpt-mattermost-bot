@@ -172,25 +172,17 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
         }
 
         // check if bot was mentioned in this post
-        // Mattermost stores mentions in metadata, try both props.mentions and metadata
-        let botWasMentioned = false
-
-        if (previousPosts[i].metadata?.mentions) {
-            // newer format: metadata.mentions is an array of user objects
-            botWasMentioned = previousPosts[i].metadata.mentions.some((mention: any) => mention.id === meId)
-        } else if (previousPosts[i].props?.mentions) {
-            // older format: props.mentions might be a JSON string
+        // Mattermost stores mentions in props.mentions as a JSON string array
+        if (previousPosts[i].props?.mentions) {
             try {
                 const postMentions = JSON.parse(previousPosts[i].props.mentions)
-                botWasMentioned = postMentions.includes(meId)
+                if (postMentions.includes(meId)) {
+                    // we were mentioned in the thread => respond
+                    return false
+                }
             } catch {
-                // if parsing fails, ignore
+                // if parsing fails, ignore and continue
             }
-        }
-
-        if (botWasMentioned) {
-            // we were mentioned in the thread => respond
-            return false
         }
     }
 
