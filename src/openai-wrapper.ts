@@ -147,9 +147,9 @@ export async function createChatCompletion(
 
 export async function createImage(prompt: string): Promise<string | undefined> {
     try {
-        // Use GPT-IMAGE-1 for image generation
+        // Use GPT-IMAGE-2 for image generation
         const image = await openai.images.generate({
-            model: "gpt-image-1",
+            model: "gpt-image-2",
             prompt,
             quality: imageQuality,
             size: '1024x1024',
