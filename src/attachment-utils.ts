@@ -1,4 +1,3 @@
-import 'isomorphic-fetch';
 import OpenAI from 'openai';
 import {inflateRawSync} from "zlib";
 import {FileInfo} from "@mattermost/types/lib/files";

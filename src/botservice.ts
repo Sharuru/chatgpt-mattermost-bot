@@ -1,8 +1,6 @@
 import 'dotenv/config';
 import {continueThread, registerChatPlugin} from "./openai-wrapper";
 import {mmClient, wsClient} from "./mm-client";
-import 'babel-polyfill'
-import 'isomorphic-fetch'
 import {WebSocketMessage} from "@mattermost/client";
 import OpenAI from 'openai';
 import {ImagePlugin} from "./plugins/ImagePlugin";
@@ -12,10 +10,6 @@ import {JSONMessageData, MessageData} from "./types";
 import {buildUserMessage} from "./attachment-utils";
 import {MessageCollectPlugin} from "./plugins/MessageCollectPlugin";
 import {botLog, matterMostLog} from "./logging";
-
-if (!global.FormData) {
-    global.FormData = require('form-data')
-}
 
 const name = process.env['MATTERMOST_BOTNAME'] || '@chatgpt'
 const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST_USER'].split(',') : []

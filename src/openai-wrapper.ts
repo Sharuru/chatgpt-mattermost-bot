@@ -1,22 +1,8 @@
-import OpenAI from 'openai';
+import OpenAI, {toFile} from 'openai';
 import {openAILog as log} from "./logging";
 import {ModelAttachment} from "./attachment-utils";
 import {PluginBase} from "./plugins/PluginBase";
 import {AiResponse, MessageData} from "./types";
-import 'isomorphic-fetch';
-
-// Node 16 needs a Blob polyfill for the OpenAI SDK upload path.
-{
-    const { Blob } = require('buffer');
-
-    if (typeof globalThis.Blob === 'undefined') {
-        globalThis.Blob = Blob;
-    }
-
-    if (typeof global.Blob === 'undefined') {
-        global.Blob = globalThis.Blob;
-    }
-}
 
 const apiKey = process.env['OPENAI_API_KEY'];
 const basePath = process.env['OPENAI_API_BASE'];
@@ -24,8 +10,7 @@ log.trace({apiKey, basePath});
 
 const openai = new OpenAI({
     apiKey,
-    baseURL: basePath,
-    fetch: fetch
+    baseURL: basePath
 });
 
 const model = process.env['OPENAI_MODEL_NAME'] ?? 'gpt-4.1';
@@ -160,10 +145,11 @@ export async function createImage(
     referenceImages: Array<ModelAttachment & {base64Data: string}> = []
 ): Promise<string | undefined> {
     try {
+        const referenceFiles = await Promise.all(referenceImages.map(createReferenceImageFile));
         const image = referenceImages.length
             ? await openai.images.edit({
                 model: imageEditModel,
-                image: referenceImages.map(toNamedBlob),
+                image: referenceFiles.length === 1 ? referenceFiles[0] : referenceFiles,
                 prompt,
                 quality: imageQuality,
                 size: '1024x1024',
@@ -214,13 +200,12 @@ export async function createImage(
     }
 }
 
-function toNamedBlob(image: ModelAttachment & {base64Data: string}): Blob & {name: string} {
-    const blob = new Blob([Buffer.from(image.base64Data, 'base64')], {type: image.mimeType}) as Blob & {name: string};
-    Object.defineProperty(blob, 'name', {
-        value: image.name,
-        configurable: true
-    });
-    return blob;
+async function createReferenceImageFile(image: ModelAttachment & {base64Data: string}) {
+    return toFile(
+        Buffer.from(image.base64Data, 'base64'),
+        image.name,
+        {type: image.mimeType}
+    );
 }
 
 function normalizeImageQuality(value: string | undefined): 'auto' | 'standard' | 'low' | 'medium' | 'high' {

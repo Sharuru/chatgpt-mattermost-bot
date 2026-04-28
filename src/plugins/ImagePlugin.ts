@@ -3,8 +3,7 @@ import {AiResponse, MessageData} from "../types";
 import OpenAI from 'openai';
 import {ModelAttachment, resolvePostAttachments} from "../attachment-utils";
 import {createChatCompletion, createImage} from "../openai-wrapper";
-import FormData from "form-data";
-import {mmClient} from "../mm-client";
+import {uploadFileToMattermost} from "../mm-client";
 
 type ImagePluginArgs = {
     imageDescription: string
@@ -88,10 +87,12 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
     }
 
     async base64ToFile (b64String: string, channelId: string) {
-        const form = new FormData()
-        form.append('channel_id', channelId);
-        form.append('files', Buffer.from(b64String, 'base64'), 'image.png');
-        const response = await mmClient.uploadFile(form)
+        const response = await uploadFileToMattermost(
+            channelId,
+            Buffer.from(b64String, 'base64'),
+            'image.png',
+            'image/png'
+        );
         this.log.trace('Uploaded a file with id', response.file_infos[0].id)
         return response.file_infos[0].id
     }
