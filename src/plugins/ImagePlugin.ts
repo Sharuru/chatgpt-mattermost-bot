@@ -1,6 +1,7 @@
 import {PluginBase} from "./PluginBase";
 import {AiResponse, MessageData} from "../types";
 import OpenAI from 'openai';
+import {ModelAttachment, resolvePostAttachments} from "../attachment-utils";
 import {createChatCompletion, createImage} from "../openai-wrapper";
 import FormData from "form-data";
 import {mmClient} from "../mm-client";
@@ -10,6 +11,7 @@ type ImagePluginArgs = {
 }
 
 export class ImagePlugin extends PluginBase<ImagePluginArgs> {
+    private readonly supportedReferenceMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
     private readonly GPT_INSTRUCTIONS = "你是一位 AI 的 prompt 工程师，帮助用户创建优质的 AI 图片生成提示。" + 
     "用户会提供简短的图像描述，你需要将其转化为合适的提示文本。" + 
     "创建提示时，首先描述图像的外观和结构。其次，描述摄影风格，如相机角度、相机位置、镜头等。第三，描述光线和特定颜色。" + 
@@ -36,6 +38,13 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
         }
 
         try {
+            const referenceImages = (await resolvePostAttachments(msgData.post)).supported
+                .filter((attachment): attachment is ModelAttachment & {base64Data: string, dataUrl: string} =>
+                    attachment.kind === 'image' &&
+                    !!attachment.base64Data &&
+                    !!attachment.dataUrl &&
+                    this.supportedReferenceMimeTypes.has(attachment.mimeType.toLowerCase())
+                );
             let imagePrompt;
             const msgText = msgData.post.message;
             if(msgText.startsWith("[直接生成图片]") || msgText.includes("[直接生成图片]")) {
@@ -45,7 +54,7 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
             }
             if(imagePrompt) {
                 this.log.trace({imageInputPrompt: args.imageDescription, imageOutputPrompt: imagePrompt})
-                const base64Image = await createImage(imagePrompt)
+                const base64Image = await createImage(imagePrompt, referenceImages)
                 if(base64Image) {
                     const fileId = await this.base64ToFile(base64Image, msgData.post.channel_id)
                     aiResponse.message = "" + imagePrompt

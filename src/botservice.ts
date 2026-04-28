@@ -9,7 +9,7 @@ import {ImagePlugin} from "./plugins/ImagePlugin";
 import {Post} from "@mattermost/types/lib/posts";
 import {PluginBase} from "./plugins/PluginBase";
 import {JSONMessageData, MessageData} from "./types";
-import {ExitPlugin} from "./plugins/ExitPlugin";
+import {buildUserMessage} from "./attachment-utils";
 import {MessageCollectPlugin} from "./plugins/MessageCollectPlugin";
 import {botLog, matterMostLog} from "./logging";
 
@@ -32,8 +32,7 @@ const additionalBotInstructions = process.env['BOT_INSTRUCTION'] || "你是一�
 "例如，当你收到英语请求时，应该用英语回复；当你收到中文请求时，应该用中文回复。对于未知语言或不确信的请求，始终使用中文回复。"
 
 const plugins: PluginBase<any>[] = [
-    new ImagePlugin("image-plugin", "Generates an image based on a given image description."),
-    new ExitPlugin("exit-plugin", "Says goodbye to the user and wish him a good day."),
+    new ImagePlugin("image-plugin", "Generates an image from the user's request and can use an attached image as a reference."),
     new MessageCollectPlugin("message-collect-plugin", "Collects messages in the thread for a specific user or time"),
 ]
 
@@ -53,38 +52,38 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
         return
     }
 
-    const chatmessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        {
-            role: 'system',
-            content: botInstructions
-        },
-    ]
-
-    // create the context
-    for (const threadPost of posts.slice(-contextMsgCount)) {
-        matterMostLog.trace({msg: threadPost})
-        if (threadPost.user_id === meId) {
-            chatmessages.push({
-                role: 'assistant',
-                content: threadPost.props.originalMessage ?? threadPost.message
-            })
-        } else {
-            const friendlyName = await getUserFriendlyName(threadPost.user_id);
-            chatmessages.push({
-                role: 'user',
-                name: await userIdToName(threadPost.user_id),
-                content: `我的名字是：[${friendlyName}] ${threadPost.message}`
-            })
-        }
-    }
-
-    // start typing
     const typing = () => wsClient.userTyping(msgData.post.channel_id, (msgData.post.root_id || msgData.post.id) ?? "")
     typing()
     const typingInterval = setInterval(typing, 2000)
 
     try {
-        const {message, fileId, props} = await continueThread(chatmessages, msgData)
+        const threadPosts = posts.slice(-contextMsgCount)
+        const chatmessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            {
+                role: 'system',
+                content: botInstructions
+            },
+        ]
+
+        for (const threadPost of threadPosts) {
+            matterMostLog.trace({msg: threadPost})
+            if (threadPost.user_id === meId) {
+                chatmessages.push({
+                    role: 'assistant',
+                    content: threadPost.props.originalMessage ?? threadPost.message
+                })
+            } else {
+                const friendlyName = await getUserFriendlyName(threadPost.user_id);
+                chatmessages.push(await buildUserMessage(
+                    await userIdToName(threadPost.user_id),
+                    friendlyName,
+                    threadPost
+                ))
+            }
+        }
+
+        const aiResponse = await continueThread(chatmessages, msgData)
+        const {message, fileId, props} = aiResponse
         botLog.trace({message})
 
         // create answer response
@@ -161,11 +160,6 @@ function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Pos
     } 
 
     for (let i = previousPosts.length - 1; i >= 0; i--) {
-        // we were asked to stop participating in the conversation
-        if (previousPosts[i].props.bot_status === 'stopped') {
-            return true
-        }
-
         if (previousPosts[i].user_id === meId || previousPosts[i].message.includes(name)) {
             // we are in a thread were we are actively participating, or we were mentioned in the thread => respond
             return false

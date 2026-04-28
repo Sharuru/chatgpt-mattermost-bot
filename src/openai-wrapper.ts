@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
+import {toFile} from 'openai';
 import {openAILog as log} from "./logging";
+import {ModelAttachment} from "./attachment-utils";
 import {PluginBase} from "./plugins/PluginBase";
 import {AiResponse, MessageData} from "./types";
 import 'isomorphic-fetch';
@@ -23,10 +25,12 @@ const openai = new OpenAI({
 const model = process.env['OPENAI_MODEL_NAME'] ?? 'gpt-4.1';
 const max_tokens = Number(process.env['OPENAI_MAX_TOKENS'] ?? 8192);
 const temperature = Number(process.env['OPENAI_TEMPERATURE'] ?? 1);
+const imageModel = process.env['OPENAI_IMAGE_MODEL'] ?? 'gpt-image-2';
+const imageEditModel = process.env['OPENAI_IMAGE_EDIT_MODEL'] ?? imageModel;
 
 // Image generation configuration
-const imageQuality = (process.env['OPENAI_IMAGE_QUALITY'] ?? 'auto') as 'medium' | 'auto' | 'standard' | 'hd' | 'low' | 'high';
-log.debug({model, max_tokens, temperature, imageQuality});
+const imageQuality = normalizeImageQuality(process.env['OPENAI_IMAGE_QUALITY']);
+log.debug({model, max_tokens, temperature, imageModel, imageEditModel, imageQuality});
 
 const plugins: Map<string, PluginBase<any>> = new Map();
 const functions: OpenAI.Chat.ChatCompletionCreateParams.Function[] = [];
@@ -145,17 +149,32 @@ export async function createChatCompletion(
     }
 }
 
-export async function createImage(prompt: string): Promise<string | undefined> {
+export async function createImage(
+    prompt: string,
+    referenceImages: Array<ModelAttachment & {base64Data: string}> = []
+): Promise<string | undefined> {
     try {
-        // Use GPT-IMAGE-2 for image generation
-        const image = await openai.images.generate({
-            model: "gpt-image-2",
-            prompt,
-            quality: imageQuality,
-            size: '1024x1024',
-            n: 1,
-            response_format: 'b64_json'
-        });
+        const image = referenceImages.length
+            ? await openai.images.edit({
+                model: imageEditModel,
+                image: await Promise.all(referenceImages.map(image => toFile(
+                    Buffer.from(image.base64Data, 'base64'),
+                    image.name,
+                    {type: image.mimeType}
+                ))),
+                prompt,
+                quality: imageQuality,
+                size: '1024x1024',
+                n: 1
+            })
+            : await openai.images.generate({
+                model: imageModel,
+                prompt,
+                quality: imageQuality,
+                size: '1024x1024',
+                n: 1,
+                response_format: 'b64_json'
+            });
         
         // Check if image data exists
         if (!image.data || image.data.length === 0) {
@@ -173,9 +192,36 @@ export async function createImage(prompt: string): Promise<string | undefined> {
         };
         log.trace({ image: safeImageForLogging });
         
-        return image.data[0].b64_json;
+        if (image.data[0].b64_json) {
+            return image.data[0].b64_json;
+        }
+
+        if (image.data[0].url) {
+            const response = await fetch(image.data[0].url);
+            if (!response.ok) {
+                log.error('Failed to download generated image from URL', {status: response.status, statusText: response.statusText});
+                return undefined;
+            }
+            return Buffer.from(await response.arrayBuffer()).toString('base64');
+        }
+
+        return undefined;
     } catch (error) {
         log.error('Error creating image:', error);
         return undefined;
+    }
+}
+
+function normalizeImageQuality(value: string | undefined): 'auto' | 'standard' | 'low' | 'medium' | 'high' {
+    switch ((value ?? 'auto').toLowerCase()) {
+        case 'hd':
+            return 'high';
+        case 'high':
+        case 'low':
+        case 'medium':
+        case 'standard':
+            return value!.toLowerCase() as 'high' | 'low' | 'medium' | 'standard';
+        default:
+            return 'auto';
     }
 }
