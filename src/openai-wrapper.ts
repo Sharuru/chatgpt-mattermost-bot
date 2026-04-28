@@ -12,6 +12,12 @@ if (typeof global.Blob === 'undefined') {
     global.Blob = Blob;
 }
 
+// openai's upload helpers also require a global File in Node < 20.
+if (typeof global.File === 'undefined') {
+    const { File } = require('buffer');
+    global.File = File;
+}
+
 const apiKey = process.env['OPENAI_API_KEY'];
 const basePath = process.env['OPENAI_API_BASE'];
 log.trace({apiKey, basePath});
