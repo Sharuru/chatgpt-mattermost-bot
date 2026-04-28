@@ -1,21 +1,21 @@
 import OpenAI from 'openai';
-import {toFile} from 'openai';
 import {openAILog as log} from "./logging";
 import {ModelAttachment} from "./attachment-utils";
 import {PluginBase} from "./plugins/PluginBase";
 import {AiResponse, MessageData} from "./types";
 import 'isomorphic-fetch';
 
-// Add Blob polyfill for Node.js environments
-if (typeof global.Blob === 'undefined') {
+// Node 16 needs a Blob polyfill for the OpenAI SDK upload path.
+{
     const { Blob } = require('buffer');
-    global.Blob = Blob;
-}
 
-// openai's upload helpers also require a global File in Node < 20.
-if (typeof global.File === 'undefined') {
-    const { File } = require('buffer');
-    global.File = File;
+    if (typeof globalThis.Blob === 'undefined') {
+        globalThis.Blob = Blob;
+    }
+
+    if (typeof global.Blob === 'undefined') {
+        global.Blob = globalThis.Blob;
+    }
 }
 
 const apiKey = process.env['OPENAI_API_KEY'];
@@ -163,11 +163,7 @@ export async function createImage(
         const image = referenceImages.length
             ? await openai.images.edit({
                 model: imageEditModel,
-                image: await Promise.all(referenceImages.map(image => toFile(
-                    Buffer.from(image.base64Data, 'base64'),
-                    image.name,
-                    {type: image.mimeType}
-                ))),
+                image: referenceImages.map(toNamedBlob),
                 prompt,
                 quality: imageQuality,
                 size: '1024x1024',
@@ -216,6 +212,15 @@ export async function createImage(
         log.error('Error creating image:', error);
         return undefined;
     }
+}
+
+function toNamedBlob(image: ModelAttachment & {base64Data: string}): Blob & {name: string} {
+    const blob = new Blob([Buffer.from(image.base64Data, 'base64')], {type: image.mimeType}) as Blob & {name: string};
+    Object.defineProperty(blob, 'name', {
+        value: image.name,
+        configurable: true
+    });
+    return blob;
 }
 
 function normalizeImageQuality(value: string | undefined): 'auto' | 'standard' | 'low' | 'medium' | 'high' {
