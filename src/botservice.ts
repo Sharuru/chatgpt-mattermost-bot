@@ -184,13 +184,18 @@ function parseMessageData(msg: JSONMessageData): MessageData {
 }
 
 function getWebSearchPrompt(message: string): string | undefined {
-    const trimmed = message.trim()
-    if (!trimmed.startsWith(webSearchPrefix)) {
+    const normalized = stripLeadingBotMention(message.trim())
+    if (!normalized.startsWith(webSearchPrefix)) {
         return undefined
     }
 
-    const prompt = trimmed.slice(webSearchPrefix.length).trim()
+    const prompt = normalized.slice(webSearchPrefix.length).trim()
     return prompt || undefined
+}
+
+function stripLeadingBotMention(message: string): string {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return message.replace(new RegExp(`^${escapedName}\\s+`, 'i'), '').trim()
 }
 
 /**
