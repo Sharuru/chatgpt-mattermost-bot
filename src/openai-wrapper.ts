@@ -140,6 +140,31 @@ export async function createChatCompletion(
     }
 }
 
+export async function createWebSearchResponse(
+    prompt: string,
+    instructions: string
+): Promise<string | undefined> {
+    try {
+        const response = await openai.responses.create({
+            model,
+            input: prompt,
+            instructions,
+            max_output_tokens: max_tokens,
+            tools: [
+                {
+                    type: 'web_search_preview',
+                    search_context_size: 'medium'
+                }
+            ]
+        });
+        log.trace({response});
+        return response.output_text;
+    } catch (error) {
+        log.error('Error creating web search response:', error);
+        return undefined;
+    }
+}
+
 export async function createImage(
     prompt: string,
     referenceImages: Array<ModelAttachment & {base64Data: string}> = []

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import {continueThread, registerChatPlugin} from "./openai-wrapper";
+import {continueThread, createWebSearchResponse, registerChatPlugin} from "./openai-wrapper";
 import {mmClient, wsClient} from "./mm-client";
 import {WebSocketMessage} from "@mattermost/client";
 import OpenAI from 'openai';
@@ -32,6 +32,7 @@ const plugins: PluginBase<any>[] = [
 
 const botInstructions = "你的名字是 " + name + ". " + additionalBotInstructions
 botLog.debug({botInstructions: botInstructions})
+const webSearchPrefix = "[联网搜索]"
 
 async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: string) {
     if (msg.event !== 'posted' || !meId) {
@@ -76,7 +77,13 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
             }
         }
 
-        const aiResponse = await continueThread(chatmessages, msgData)
+        const searchPrompt = getWebSearchPrompt(msgData.post.message)
+        const aiResponse = searchPrompt
+            ? {
+                message: await createWebSearchResponse(searchPrompt, botInstructions) ?? "联网搜索失败，未能获得有效响应。",
+                props: {originalMessage: msgData.post.message}
+            }
+            : await continueThread(chatmessages, msgData)
         const {message, fileId, props} = aiResponse
         botLog.trace({message})
 
@@ -174,6 +181,16 @@ function parseMessageData(msg: JSONMessageData): MessageData {
         post: JSON.parse(msg.post),
         sender_name: msg.sender_name
     }
+}
+
+function getWebSearchPrompt(message: string): string | undefined {
+    const trimmed = message.trim()
+    if (!trimmed.startsWith(webSearchPrefix)) {
+        return undefined
+    }
+
+    const prompt = trimmed.slice(webSearchPrefix.length).trim()
+    return prompt || undefined
 }
 
 /**
