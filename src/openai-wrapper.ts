@@ -25,6 +25,8 @@ const lightRagBaseUrl = process.env['LIGHTRAG_BASE_URL'];
 const lightRagApiKey = process.env['LIGHTRAG_API_KEY'];
 const lightRagModel = process.env['LIGHTRAG_MODEL'] ?? 'lightrag:latest';
 const lightRagDefaultMode = normalizeLightRagMode(process.env['LIGHTRAG_DEFAULT_MODE']);
+const webSearchToolType = normalizeWebSearchToolType(process.env['OPENAI_WEB_SEARCH_TOOL']);
+const webSearchContextSize = normalizeWebSearchContextSize(process.env['OPENAI_WEB_SEARCH_CONTEXT_SIZE']);
 
 // Image generation configuration
 const imageQuality = normalizeImageQuality(process.env['OPENAI_IMAGE_QUALITY']);
@@ -150,7 +152,8 @@ export async function createChatCompletion(
 export async function createWebSearchResponse(
     prompt: string,
     instructions: string,
-    includeUrls = false
+    includeUrls = false,
+    forceSearch = false
 ): Promise<{message: string, urls: string[]} | undefined> {
     try {
         const response = await openai.responses.create({
@@ -159,17 +162,18 @@ export async function createWebSearchResponse(
             instructions,
             max_output_tokens: max_tokens,
             include: includeUrls ? ['web_search_call.results' as any] : undefined,
+            tool_choice: forceSearch ? 'required' : undefined,
             tools: [
                 {
-                    type: 'web_search_preview',
-                    search_context_size: 'medium'
+                    type: webSearchToolType as any,
+                    search_context_size: webSearchContextSize
                 }
             ]
         });
         log.trace({response});
         return {
             message: response.output_text,
-            urls: includeUrls ? extractWebSearchUrls(response) : []
+            urls: includeUrls ? extractWebSearchSources(response).map(source => source.url) : []
         };
     } catch (error) {
         log.error('Error creating web search response:', error);
@@ -331,6 +335,26 @@ function normalizeLightRagMode(value: string | undefined): LightRagMode | undefi
     }
 }
 
+function normalizeWebSearchToolType(value: string | undefined): 'web_search' | 'web_search_preview' {
+    switch ((value ?? 'web_search').toLowerCase()) {
+        case 'web_search_preview':
+        case 'preview':
+            return 'web_search_preview';
+        default:
+            return 'web_search';
+    }
+}
+
+function normalizeWebSearchContextSize(value: string | undefined): 'low' | 'medium' | 'high' {
+    switch ((value ?? 'medium').toLowerCase()) {
+        case 'low':
+        case 'high':
+            return value!.toLowerCase() as 'low' | 'high';
+        default:
+            return 'medium';
+    }
+}
+
 function chooseImageSize(referenceImages: PreparedReferenceImage[]): ImageOutputSize {
     if (imageSize !== 'match-reference') {
         return imageSize;
@@ -355,16 +379,26 @@ function chooseImageSize(referenceImages: PreparedReferenceImage[]): ImageOutput
     return '1024x1024';
 }
 
-function extractWebSearchUrls(response: unknown): string[] {
-    const urls: string[] = [];
+type WebSearchSource = {
+    url: string,
+    title?: string,
+    snippet?: string
+}
+
+function extractWebSearchSources(response: unknown): WebSearchSource[] {
+    const sources: WebSearchSource[] = [];
     const seen = new Set<string>();
 
-    function addUrl(value: unknown) {
+    function addSource(value: unknown, record?: Record<string, unknown>) {
         if (typeof value !== 'string' || !/^https?:\/\//i.test(value) || seen.has(value)) {
             return;
         }
         seen.add(value);
-        urls.push(value);
+        sources.push({
+            url: value,
+            title: typeof record?.title === 'string' ? record.title : undefined,
+            snippet: typeof record?.snippet === 'string' ? record.snippet.slice(0, 1200) : undefined
+        });
     }
 
     function visit(value: unknown) {
@@ -381,14 +415,16 @@ function extractWebSearchUrls(response: unknown): string[] {
 
         const record = value as Record<string, unknown>;
         if (record.type === 'url_citation') {
-            addUrl(record.url);
+            addSource(record.url, record);
+        }
+        if (record.url_citation && typeof record.url_citation === 'object') {
+            visit(record.url_citation);
         }
 
-        if (record.url) {
-            addUrl(record.url);
-        }
-        if (record.source_website_url) {
-            addUrl(record.source_website_url);
+        for (const key of ['url', 'source_website_url', 'uri', 'link']) {
+            if (record[key]) {
+                addSource(record[key], record);
+            }
         }
 
         for (const nested of Object.values(record)) {
@@ -397,5 +433,6 @@ function extractWebSearchUrls(response: unknown): string[] {
     }
 
     visit(response);
-    return urls;
+    log.debug({webSearchUrlCount: sources.length, webSearchUrls: sources.map(source => source.url)});
+    return sources;
 }

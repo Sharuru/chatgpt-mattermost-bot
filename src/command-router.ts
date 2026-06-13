@@ -7,7 +7,7 @@ import {USER_FACING_ERROR_MESSAGE} from "./error-messages";
 import {createWebsiteScreenshots} from "./screenshot-utils";
 
 export type BotCommand =
-    | {type: 'search', prompt: string, screenshots: boolean, screenshotLimit: number}
+    | {type: 'search', prompt: string, force: boolean, screenshots: boolean, screenshotLimit: number}
     | {type: 'image', prompt: string, raw: boolean}
     | {type: 'rag', prompt: string, mode?: LightRagMode}
     | {type: 'leave'}
@@ -47,7 +47,7 @@ export function parseBotCommand(message: string, botName: string): BotCommand | 
 export async function runBotCommand(command: BotCommand, post: Post, botInstructions: string): Promise<AiResponse> {
     switch (command.type) {
         case 'search':
-            const searchResult = await createWebSearchResponse(command.prompt, botInstructions, command.screenshots);
+            const searchResult = await createWebSearchResponse(command.prompt, botInstructions, command.screenshots, command.force);
             if (!searchResult) {
                 return {message: USER_FACING_ERROR_MESSAGE};
             }
@@ -69,9 +69,12 @@ export async function runBotCommand(command: BotCommand, post: Post, botInstruct
             const screenshotText = screenshotResult.omitted.length
                 ? `\n\n截图失败：${screenshotResult.omitted.join('，')}`
                 : "";
+            const noUrlsText = searchResult.urls.length
+                ? ""
+                : "\n\n未生成截图：模型未使用网络搜索，或搜索结果未返回可截图的引用 URL。";
 
             return {
-                message: `${searchResult.message}${sourceText}${screenshotText}`,
+                message: `${searchResult.message}${sourceText}${screenshotText}${noUrlsText}`,
                 fileIds: screenshotResult.fileIds,
                 props: {originalMessage: post.message}
             };
@@ -97,8 +100,15 @@ export async function runBotCommand(command: BotCommand, post: Post, botInstruct
 
 function parseSearchCommand(input: string): BotCommand | undefined {
     let rest = input.trim();
+    let force = false;
     let screenshots = false;
     let screenshotLimit = defaultScreenshotLimit;
+
+    const forceMatch = rest.match(/(?:^|\s)--force(?:\s|$)/);
+    if (forceMatch) {
+        force = true;
+        rest = rest.replace(/(?:^|\s)--force(?:\s|$)/, ' ').trim();
+    }
 
     const screenshotMatch = rest.match(/(?:^|\s)--screenshot(?:\s|$)/);
     if (screenshotMatch) {
@@ -119,6 +129,7 @@ function parseSearchCommand(input: string): BotCommand | undefined {
     return {
         type: 'search',
         prompt: rest,
+        force,
         screenshots,
         screenshotLimit: Math.min(3, Math.max(1, screenshotLimit))
     };

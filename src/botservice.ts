@@ -13,6 +13,7 @@ import {botLog, matterMostLog} from "./logging";
 import {isJoinCommand, parseBotCommand, runBotCommand} from "./command-router";
 import {USER_FACING_ERROR_MESSAGE} from "./error-messages";
 import {getThreadId, isThreadMuted} from "./thread-state";
+import {createBotPosts} from "./mattermost-post-utils";
 
 const name = process.env['MATTERMOST_BOTNAME'] || '@chatgpt'
 const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST_USER'].split(',') : []
@@ -87,21 +88,19 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
         const {message, fileId, fileIds, props} = aiResponse
         botLog.trace({message})
 
-        // create answer response
-        const newPost = await mmClient.createPost({
+        await createBotPosts({
             message: message,
-            channel_id: msgData.post.channel_id,
+            channelId: msgData.post.channel_id,
             props,
-            root_id: msgData.post.root_id || msgData.post.id,
-            file_ids: fileIds?.length ? fileIds : (fileId ? [fileId] : undefined)
+            rootId: msgData.post.root_id || msgData.post.id,
+            fileIds: fileIds?.length ? fileIds : (fileId ? [fileId] : undefined)
         })
-        botLog.trace({msg: newPost})
     } catch (e) {
         botLog.error(e)
-        await mmClient.createPost({
+        await createBotPosts({
             message: USER_FACING_ERROR_MESSAGE,
-            channel_id: msgData.post.channel_id,
-            root_id: msgData.post.root_id || msgData.post.id,
+            channelId: msgData.post.channel_id,
+            rootId: msgData.post.root_id || msgData.post.id,
         })
     } finally {
         // stop typing
