@@ -16,22 +16,10 @@ WORKDIR /app
 ARG NODE_ENV=production
 ENV NODE_ENV $NODE_ENV
 ENV PLUGINS=image-plugin
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-USER root
-RUN apk add --no-cache \
-    chromium \
-    fontconfig \
-    font-noto \
-    font-noto-cjk \
-    font-noto-emoji \
-    ttf-dejavu \
-    ttf-liberation \
-    && fc-cache -f
-
-USER node
 
 # Avoid running as root:
+USER node
+
 COPY --from=npm_builder [ "/app/node_modules/", "./node_modules/" ]
 COPY --from=npm_builder [ "/app/dist/", "./src/" ]
 COPY [ "./license.md", "./" ]
