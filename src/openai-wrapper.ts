@@ -27,6 +27,10 @@ const lightRagModel = process.env['LIGHTRAG_MODEL'] ?? 'lightrag:latest';
 const lightRagDefaultMode = normalizeLightRagMode(process.env['LIGHTRAG_DEFAULT_MODE']);
 const webSearchToolType = normalizeWebSearchToolType(process.env['OPENAI_WEB_SEARCH_TOOL']);
 const webSearchContextSize = normalizeWebSearchContextSize(process.env['OPENAI_WEB_SEARCH_CONTEXT_SIZE']);
+const webSearchPreferChinese = process.env['OPENAI_WEB_SEARCH_PREFER_CHINESE'] !== 'false';
+const webSearchDefaultAllowedDomains = parseDomainList(process.env['OPENAI_WEB_SEARCH_ALLOWED_DOMAINS']);
+const webSearchDefaultBlockedDomains = parseDomainList(process.env['OPENAI_WEB_SEARCH_BLOCKED_DOMAINS']);
+const webSearchUserLocation = buildWebSearchUserLocation();
 
 // Image generation configuration
 const imageQuality = normalizeImageQuality(process.env['OPENAI_IMAGE_QUALITY']);
@@ -151,24 +155,39 @@ export async function createChatCompletion(
 
 export async function createWebSearchResponse(
     prompt: string,
-    instructions: string,
-    includeUrls = false,
-    forceSearch = false
+    options: {
+        instructions: string,
+        includeUrls?: boolean,
+        forceSearch?: boolean,
+        allowedDomains?: string[]
+    }
 ): Promise<{message: string, urls: string[]} | undefined> {
     try {
+        const includeUrls = options.includeUrls ?? false;
+        const allowedDomains = options.allowedDomains?.length ? options.allowedDomains : webSearchDefaultAllowedDomains;
+        const webSearchTool: Record<string, unknown> = {
+            type: webSearchToolType,
+            search_context_size: webSearchContextSize
+        };
+
+        if (webSearchUserLocation) {
+            webSearchTool.user_location = webSearchUserLocation;
+        }
+        if (webSearchToolType === 'web_search' && (allowedDomains.length || webSearchDefaultBlockedDomains.length)) {
+            webSearchTool.filters = {
+                ...(allowedDomains.length ? {allowed_domains: allowedDomains} : {}),
+                ...(webSearchDefaultBlockedDomains.length ? {blocked_domains: webSearchDefaultBlockedDomains} : {})
+            };
+        }
+
         const response = await openai.responses.create({
             model,
-            input: prompt,
-            instructions,
+            input: buildLocalizedSearchPrompt(prompt, options.allowedDomains),
+            instructions: options.instructions,
             max_output_tokens: max_tokens,
             include: includeUrls ? ['web_search_call.results' as any] : undefined,
-            tool_choice: forceSearch ? 'required' : undefined,
-            tools: [
-                {
-                    type: webSearchToolType as any,
-                    search_context_size: webSearchContextSize
-                }
-            ]
+            tool_choice: options.forceSearch ? 'required' : undefined,
+            tools: [webSearchTool as any]
         });
         log.trace({response});
         return {
@@ -353,6 +372,72 @@ function normalizeWebSearchContextSize(value: string | undefined): 'low' | 'medi
         default:
             return 'medium';
     }
+}
+
+function parseDomainList(value: string | undefined): string[] {
+    if (!value) {
+        return [];
+    }
+
+    return value
+        .split(',')
+        .map(domain => normalizeSearchDomain(domain.trim()))
+        .filter((domain): domain is string => !!domain);
+}
+
+function normalizeSearchDomain(value: string): string | undefined {
+    if (!value) {
+        return undefined;
+    }
+
+    try {
+        const url = value.includes('://') ? new URL(value) : new URL(`https://${value}`);
+        return url.hostname.replace(/^www\./, '').toLowerCase();
+    } catch {
+        return value
+            .replace(/^https?:\/\//i, '')
+            .replace(/^www\./i, '')
+            .split('/')[0]
+            .toLowerCase() || undefined;
+    }
+}
+
+function buildWebSearchUserLocation():
+    | {type: 'approximate', country?: string, city?: string, region?: string, timezone?: string}
+    | undefined {
+    const country = process.env['OPENAI_WEB_SEARCH_COUNTRY'];
+    const city = process.env['OPENAI_WEB_SEARCH_CITY'];
+    const region = process.env['OPENAI_WEB_SEARCH_REGION'];
+    const timezone = process.env['OPENAI_WEB_SEARCH_TIMEZONE'];
+
+    if (!country && !city && !region && !timezone) {
+        return undefined;
+    }
+
+    return {
+        type: 'approximate',
+        ...(country ? {country} : {}),
+        ...(city ? {city} : {}),
+        ...(region ? {region} : {}),
+        ...(timezone ? {timezone} : {})
+    };
+}
+
+function buildLocalizedSearchPrompt(prompt: string, requestedDomains?: string[]): string {
+    const lines = [prompt];
+
+    if (requestedDomains?.length) {
+        lines.push(`请只在这些域名中搜索：${requestedDomains.join(', ')}。`);
+    } else if (webSearchPreferChinese && hasCjkText(prompt)) {
+        lines.push("请优先搜索中文网页、中文官网、中文公告或中文社区来源；仅在中文来源不足时再使用英文来源。");
+        lines.push("请尽量避免优先使用在中国大陆或常见企业网络中不稳定的来源，除非它们是最权威或用户明确要求。");
+    }
+
+    return lines.join('\n\n');
+}
+
+function hasCjkText(value: string): boolean {
+    return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(value);
 }
 
 function chooseImageSize(referenceImages: PreparedReferenceImage[]): ImageOutputSize {

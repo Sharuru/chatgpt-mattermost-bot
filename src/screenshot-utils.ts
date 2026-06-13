@@ -40,7 +40,7 @@ export async function createWebsiteScreenshots(channelId: string, urls: string[]
                 fileIds.push(upload.file_infos[0].id);
             } catch (error) {
                 botLog.error({message: 'Failed to create website screenshot', url, error});
-                omitted.push(`${i + 1}`);
+                omitted.push(`第 ${i + 1} 个 URL ${describeScreenshotError(error)}`);
             }
         }
     } catch (error) {
@@ -55,6 +55,9 @@ export async function createWebsiteScreenshots(channelId: string, urls: string[]
 
 async function captureWebsiteScreenshot(browser: Awaited<ReturnType<typeof chromium.launch>>, url: string): Promise<Buffer> {
     const page = await browser.newPage({
+        ignoreHTTPSErrors: true,
+        locale: 'zh-CN',
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         viewport: {
             width: screenshotViewportWidth,
             height: screenshotViewportHeight
@@ -62,6 +65,7 @@ async function captureWebsiteScreenshot(browser: Awaited<ReturnType<typeof chrom
     });
 
     try {
+        page.setDefaultTimeout(screenshotTimeoutMs);
         await page.goto(url, {
             waitUntil: 'domcontentloaded',
             timeout: screenshotTimeoutMs
@@ -83,4 +87,29 @@ function defaultChromiumExecutablePath(): string | undefined {
     }
 
     return undefined;
+}
+
+function describeScreenshotError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (/Timeout|timed out|timeout/i.test(message)) {
+        return "加载超时";
+    }
+    if (/ERR_NAME_NOT_RESOLVED|ENOTFOUND|getaddrinfo/i.test(message)) {
+        return "域名解析失败";
+    }
+    if (/ERR_CONNECTION_REFUSED|ECONNREFUSED/i.test(message)) {
+        return "连接被拒绝";
+    }
+    if (/ERR_CERT|certificate|SSL|TLS/i.test(message)) {
+        return "证书校验失败";
+    }
+    if (/Target page|browser has been closed|Executable doesn't exist|Failed to launch/i.test(message)) {
+        return "浏览器不可用";
+    }
+    if (/upload|Mattermost|Failed to upload/i.test(message)) {
+        return "截图上传失败";
+    }
+
+    return "截图失败";
 }

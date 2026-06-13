@@ -7,7 +7,7 @@ import {USER_FACING_ERROR_MESSAGE} from "./error-messages";
 import {createWebsiteScreenshots} from "./screenshot-utils";
 
 export type BotCommand =
-    | {type: 'search', prompt: string, force: boolean, screenshots: boolean, screenshotLimit: number}
+    | {type: 'search', prompt: string, force: boolean, screenshots: boolean, screenshotLimit: number, allowedDomains?: string[]}
     | {type: 'image', prompt: string, raw: boolean}
     | {type: 'rag', prompt: string, mode?: LightRagMode}
     | {type: 'leave'}
@@ -47,7 +47,12 @@ export function parseBotCommand(message: string, botName: string): BotCommand | 
 export async function runBotCommand(command: BotCommand, post: Post, botInstructions: string): Promise<AiResponse> {
     switch (command.type) {
         case 'search':
-            const searchResult = await createWebSearchResponse(command.prompt, botInstructions, command.screenshots, command.force);
+            const searchResult = await createWebSearchResponse(command.prompt, {
+                instructions: botInstructions,
+                includeUrls: command.screenshots,
+                forceSearch: command.force,
+                allowedDomains: command.allowedDomains
+            });
             if (!searchResult) {
                 return {message: USER_FACING_ERROR_MESSAGE};
             }
@@ -61,10 +66,10 @@ export async function runBotCommand(command: BotCommand, post: Post, botInstruct
 
             const screenshotResult = await createWebsiteScreenshots(
                 post.channel_id,
-                searchResult.urls.slice(0, command.screenshotLimit)
+                rankSearchUrls(searchResult.urls).slice(0, command.screenshotLimit)
             );
             const sourceText = searchResult.urls.length
-                ? `\n\n引用 URL：\n${searchResult.urls.slice(0, command.screenshotLimit).map((url, index) => `${index + 1}. ${url}`).join('\n')}`
+                ? `\n\n引用 URL：\n${rankSearchUrls(searchResult.urls).slice(0, command.screenshotLimit).map((url, index) => `${index + 1}. ${url}`).join('\n')}`
                 : "";
             const screenshotText = screenshotResult.omitted.length
                 ? `\n\n截图失败：${screenshotResult.omitted.join('，')}`
@@ -103,6 +108,7 @@ function parseSearchCommand(input: string): BotCommand | undefined {
     let force = false;
     let screenshots = false;
     let screenshotLimit = defaultScreenshotLimit;
+    const allowedDomains: string[] = [];
 
     const forceMatch = rest.match(/(?:^|\s)--force(?:\s|$)/);
     if (forceMatch) {
@@ -122,6 +128,16 @@ function parseSearchCommand(input: string): BotCommand | undefined {
         rest = rest.replace(/(?:^|\s)--limit\s+\d+(?:\s|$)/, ' ').trim();
     }
 
+    let siteMatch = rest.match(/(?:^|\s)--site\s+([^\s]+)(?:\s|$)/);
+    while (siteMatch) {
+        const domain = normalizeSearchDomain(siteMatch[1]);
+        if (domain) {
+            allowedDomains.push(domain);
+        }
+        rest = rest.replace(/(?:^|\s)--site\s+[^\s]+(?:\s|$)/, ' ').trim();
+        siteMatch = rest.match(/(?:^|\s)--site\s+([^\s]+)(?:\s|$)/);
+    }
+
     if (!rest) {
         return undefined;
     }
@@ -131,7 +147,8 @@ function parseSearchCommand(input: string): BotCommand | undefined {
         prompt: rest,
         force,
         screenshots,
-        screenshotLimit: Math.min(3, Math.max(1, screenshotLimit))
+        screenshotLimit: Math.min(3, Math.max(1, screenshotLimit)),
+        allowedDomains: allowedDomains.length ? allowedDomains : undefined
     };
 }
 
@@ -163,4 +180,42 @@ function parseLightRagCommand(input: string): BotCommand | undefined {
 function stripLeadingBotMention(message: string, botName: string): string {
     const escapedName = botName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return message.replace(new RegExp(`^${escapedName}\\s+`, 'i'), '').trim();
+}
+
+function normalizeSearchDomain(value: string): string | undefined {
+    try {
+        const url = value.includes('://') ? new URL(value) : new URL(`https://${value}`);
+        return url.hostname.replace(/^www\./, '').toLowerCase();
+    } catch {
+        return undefined;
+    }
+}
+
+function rankSearchUrls(urls: string[]): string[] {
+    return [...urls].sort((left, right) => scoreSearchUrl(right) - scoreSearchUrl(left));
+}
+
+function scoreSearchUrl(url: string): number {
+    let score = 0;
+    let hostname = "";
+    try {
+        hostname = new URL(url).hostname.toLowerCase();
+    } catch {
+        return score;
+    }
+
+    if (/[^\x00-\x7F]/.test(decodeURIComponent(url))) {
+        score += 3;
+    }
+    if (hostname.endsWith('.cn') || hostname.endsWith('.com.cn')) {
+        score += 3;
+    }
+    if (hostname.includes('hypergryph') || hostname.includes('biligame') || hostname.includes('qq.com') || hostname.includes('163.com') || hostname.includes('sina.com')) {
+        score += 2;
+    }
+    if (hostname.includes('wikipedia.org') || hostname.includes('reddit.com')) {
+        score -= 3;
+    }
+
+    return score;
 }

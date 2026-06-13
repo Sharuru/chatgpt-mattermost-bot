@@ -19,7 +19,15 @@ ENV PLUGINS=image-plugin
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 USER root
-RUN apk add --no-cache chromium
+RUN apk add --no-cache \
+    chromium \
+    fontconfig \
+    font-noto \
+    font-noto-cjk \
+    font-noto-emoji \
+    ttf-dejavu \
+    ttf-liberation \
+    && fc-cache -f
 
 USER node
 
