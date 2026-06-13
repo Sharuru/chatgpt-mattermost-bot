@@ -4,6 +4,10 @@ import OpenAI from 'openai';
 import {ModelAttachment, resolvePostAttachments} from "../attachment-utils";
 import {createChatCompletion, createImage} from "../openai-wrapper";
 import {uploadFileToMattermost} from "../mm-client";
+import {Post} from "@mattermost/types/lib/posts";
+import {USER_FACING_ERROR_MESSAGE} from "../error-messages";
+import {botLog} from "../logging";
+import {prepareReferenceImages} from "../image-utils";
 
 type ImagePluginArgs = {
     imageDescription: string
@@ -32,41 +36,7 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
     }
 
     async runPlugin(args: ImagePluginArgs, msgData: MessageData): Promise<AiResponse> {
-        const aiResponse: AiResponse = {
-            message: "发生了内部错误"
-        }
-
-        try {
-            const referenceImages = (await resolvePostAttachments(msgData.post)).supported
-                .filter((attachment): attachment is ModelAttachment & {base64Data: string, dataUrl: string} =>
-                    attachment.kind === 'image' &&
-                    !!attachment.base64Data &&
-                    !!attachment.dataUrl &&
-                    this.supportedReferenceMimeTypes.has(attachment.mimeType.toLowerCase())
-                );
-            let imagePrompt;
-            const msgText = msgData.post.message;
-            if(msgText.startsWith("[直接生成图片]") || msgText.includes("[直接生成图片]")) {
-                imagePrompt = msgText.split("[直接生成图片]")[1].trim();
-            }else {
-                imagePrompt = await this.createImagePrompt(args.imageDescription)
-            }
-            if(imagePrompt) {
-                this.log.trace({imageInputPrompt: args.imageDescription, imageOutputPrompt: imagePrompt})
-                const base64Image = await createImage(imagePrompt, referenceImages)
-                if(base64Image) {
-                    const fileId = await this.base64ToFile(base64Image, msgData.post.channel_id)
-                    aiResponse.message = "" + imagePrompt
-                    aiResponse.props = {originalMessage: "<IMAGE>" + imagePrompt + "</IMAGE>"}
-                    aiResponse.fileId = fileId
-                }
-            }
-        } catch (e) {
-            this.log.error(e)
-            this.log.error(`The input was:\n\n${args.imageDescription}`)
-        }
-
-       return aiResponse
+       return createImagePromptAndFile(args.imageDescription, msgData.post)
     }
 
     async createImagePrompt(userInput: string): Promise<string | undefined> {
@@ -96,4 +66,46 @@ export class ImagePlugin extends PluginBase<ImagePluginArgs> {
         this.log.trace('Uploaded a file with id', response.file_infos[0].id)
         return response.file_infos[0].id
     }
+}
+
+export async function createImagePromptAndFile(prompt: string, post: Post, raw = false): Promise<AiResponse> {
+    const aiResponse: AiResponse = {
+        message: USER_FACING_ERROR_MESSAGE
+    };
+
+    try {
+        const referenceImages = (await resolvePostAttachments(post)).supported
+            .filter((attachment): attachment is ModelAttachment & {base64Data: string, dataUrl: string} =>
+                attachment.kind === 'image' &&
+                !!attachment.base64Data &&
+                !!attachment.dataUrl &&
+                new Set(['image/jpeg', 'image/png', 'image/webp']).has(attachment.mimeType.toLowerCase())
+            );
+        const normalizedReferenceImages = await prepareReferenceImages(referenceImages);
+        const imagePrompt = raw ? prompt : await createStandaloneImagePrompt(prompt);
+        if(imagePrompt) {
+            botLog.trace({imageInputPrompt: prompt, imageOutputPrompt: imagePrompt})
+            const base64Image = await createImage(imagePrompt, normalizedReferenceImages)
+            if(base64Image) {
+                const response = await uploadFileToMattermost(
+                    post.channel_id,
+                    Buffer.from(base64Image, 'base64'),
+                    'image.png',
+                    'image/png'
+                );
+                aiResponse.message = "" + imagePrompt
+                aiResponse.props = {originalMessage: "<IMAGE>" + imagePrompt + "</IMAGE>"}
+                aiResponse.fileId = response.file_infos[0].id
+            }
+        }
+    } catch (e) {
+        botLog.error(e)
+        botLog.error(`The input was:\n\n${prompt}`)
+    }
+
+    return aiResponse
+}
+
+async function createStandaloneImagePrompt(userInput: string): Promise<string | undefined> {
+    return new ImagePlugin("image-plugin", "").createImagePrompt(userInput);
 }

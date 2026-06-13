@@ -1,8 +1,10 @@
 import OpenAI, {toFile} from 'openai';
 import {openAILog as log} from "./logging";
-import {ModelAttachment} from "./attachment-utils";
 import {PluginBase} from "./plugins/PluginBase";
 import {AiResponse, MessageData} from "./types";
+import {USER_FACING_ERROR_MESSAGE} from "./error-messages";
+import type {LightRagMode} from "./command-router";
+import {ImageOutputSize, normalizeImageOutputSize, PreparedReferenceImage} from "./image-utils";
 
 const apiKey = process.env['OPENAI_API_KEY'];
 const basePath = process.env['OPENAI_API_BASE'];
@@ -18,6 +20,11 @@ const max_tokens = Number(process.env['OPENAI_MAX_TOKENS'] ?? 8192);
 const temperature = Number(process.env['OPENAI_TEMPERATURE'] ?? 1);
 const imageModel = process.env['OPENAI_IMAGE_MODEL'] ?? 'gpt-image-2';
 const imageEditModel = process.env['OPENAI_IMAGE_EDIT_MODEL'] ?? imageModel;
+const imageSize = normalizeImageOutputSize(process.env['OPENAI_IMAGE_SIZE']);
+const lightRagBaseUrl = process.env['LIGHTRAG_BASE_URL'];
+const lightRagApiKey = process.env['LIGHTRAG_API_KEY'];
+const lightRagModel = process.env['LIGHTRAG_MODEL'] ?? 'lightrag:latest';
+const lightRagDefaultMode = normalizeLightRagMode(process.env['LIGHTRAG_DEFAULT_MODE']);
 
 // Image generation configuration
 const imageQuality = normalizeImageQuality(process.env['OPENAI_IMAGE_QUALITY']);
@@ -44,7 +51,7 @@ export async function continueThread(
     msgData: MessageData
 ): Promise<AiResponse> {
     let aiResponse: AiResponse = {
-        message: 'Sorry, but it seems I found no valid response.'
+        message: USER_FACING_ERROR_MESSAGE
     };
 
     let maxChainLength = 7;
@@ -84,12 +91,12 @@ export async function continueThread(
                             continue;
                         } else {
                             log.debug({ messages });
-                            aiResponse.message = `Sorry, but it seems there was an error when using the plugin \`\`\`${pluginName}\`\`\`.`;
+                            aiResponse.message = USER_FACING_ERROR_MESSAGE;
                         }
                     }
                 } catch (e) {
                     log.debug({ messages, error: e });
-                    aiResponse.message = `Sorry, but it seems there was an error when using the plugin \`\`\`${pluginName}\`\`\`.`;
+                    aiResponse.message = USER_FACING_ERROR_MESSAGE;
                 }
             } else if(responseMessage.content) {
                 // filter think blocks
@@ -165,26 +172,84 @@ export async function createWebSearchResponse(
     }
 }
 
+export async function createLightRagResponse(
+    prompt: string,
+    mode?: LightRagMode
+): Promise<string | undefined> {
+    if (!lightRagBaseUrl) {
+        log.error('LIGHTRAG_BASE_URL is not configured.');
+        return undefined;
+    }
+
+    const selectedMode = mode ?? lightRagDefaultMode;
+    const lightRagPrompt = selectedMode ? `/${selectedMode} ${prompt}` : prompt;
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+    };
+
+    if (lightRagApiKey) {
+        headers.Authorization = `Bearer ${lightRagApiKey}`;
+    }
+
+    try {
+        const response = await fetch(`${lightRagBaseUrl.replace(/\/$/, '')}/api/chat`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model: lightRagModel,
+                messages: [
+                    {
+                        role: 'user',
+                        content: lightRagPrompt
+                    }
+                ],
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            log.error('Error creating LightRAG response:', {
+                status: response.status,
+                statusText: response.statusText,
+                body: await response.text()
+            });
+            return undefined;
+        }
+
+        const result = await response.json() as {
+            message?: {content?: string},
+            response?: string,
+            choices?: Array<{message?: {content?: string}}>
+        };
+
+        return result.message?.content ?? result.response ?? result.choices?.[0]?.message?.content;
+    } catch (error) {
+        log.error('Error creating LightRAG response:', error);
+        return undefined;
+    }
+}
+
 export async function createImage(
     prompt: string,
-    referenceImages: Array<ModelAttachment & {base64Data: string}> = []
+    referenceImages: PreparedReferenceImage[] = []
 ): Promise<string | undefined> {
     try {
         const referenceFiles = await Promise.all(referenceImages.map(createReferenceImageFile));
+        const size = chooseImageSize(referenceImages);
         const image = referenceImages.length
             ? await openai.images.edit({
                 model: imageEditModel,
                 image: referenceFiles.length === 1 ? referenceFiles[0] : referenceFiles,
                 prompt,
                 quality: imageQuality,
-                size: '1024x1024',
+                size,
                 n: 1
             })
             : await openai.images.generate({
                 model: imageModel,
                 prompt,
                 quality: imageQuality,
-                size: '1024x1024',
+                size,
                 n: 1,
                 response_format: 'b64_json'
             });
@@ -225,9 +290,9 @@ export async function createImage(
     }
 }
 
-async function createReferenceImageFile(image: ModelAttachment & {base64Data: string}) {
+async function createReferenceImageFile(image: PreparedReferenceImage) {
     return toFile(
-        Buffer.from(image.base64Data, 'base64'),
+        image.buffer,
         image.name,
         {type: image.mimeType}
     );
@@ -245,4 +310,42 @@ function normalizeImageQuality(value: string | undefined): 'auto' | 'standard' |
         default:
             return 'auto';
     }
+}
+
+function normalizeLightRagMode(value: string | undefined): LightRagMode | undefined {
+    switch ((value ?? '').toLowerCase()) {
+        case 'local':
+        case 'global':
+        case 'hybrid':
+        case 'naive':
+        case 'mix':
+        case 'context':
+            return value!.toLowerCase() as LightRagMode;
+        default:
+            return undefined;
+    }
+}
+
+function chooseImageSize(referenceImages: PreparedReferenceImage[]): ImageOutputSize {
+    if (imageSize !== 'match-reference') {
+        return imageSize;
+    }
+
+    if (!referenceImages.length) {
+        return 'auto';
+    }
+
+    const primary = referenceImages[0];
+    if (!primary.width || !primary.height) {
+        return 'auto';
+    }
+
+    const ratio = primary.width / primary.height;
+    if (ratio >= 1.2) {
+        return '1536x1024';
+    }
+    if (ratio <= 0.83) {
+        return '1024x1536';
+    }
+    return '1024x1024';
 }

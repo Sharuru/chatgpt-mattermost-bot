@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import {continueThread, createWebSearchResponse, registerChatPlugin} from "./openai-wrapper";
+import {continueThread, registerChatPlugin} from "./openai-wrapper";
 import {mmClient, wsClient} from "./mm-client";
 import {WebSocketMessage} from "@mattermost/client";
 import OpenAI from 'openai';
@@ -10,6 +10,9 @@ import {JSONMessageData, MessageData} from "./types";
 import {buildUserMessage} from "./attachment-utils";
 import {MessageCollectPlugin} from "./plugins/MessageCollectPlugin";
 import {botLog, matterMostLog} from "./logging";
+import {isJoinCommand, parseBotCommand, runBotCommand} from "./command-router";
+import {USER_FACING_ERROR_MESSAGE} from "./error-messages";
+import {getThreadId, isThreadMuted} from "./thread-state";
 
 const name = process.env['MATTERMOST_BOTNAME'] || '@chatgpt'
 const whiteListUser = process.env['MATTERMOST_BOT_WHITELIST_USER'] ? process.env['MATTERMOST_BOT_WHITELIST_USER'].split(',') : []
@@ -32,7 +35,6 @@ const plugins: PluginBase<any>[] = [
 
 const botInstructions = "你的名字是 " + name + ". " + additionalBotInstructions
 botLog.debug({botInstructions: botInstructions})
-const webSearchPrefix = "[联网搜索]"
 
 async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: string) {
     if (msg.event !== 'posted' || !meId) {
@@ -42,6 +44,8 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
 
     const msgData = parseMessageData(msg.data)
     const posts = await getOlderPosts(msgData.post, {lookBackTime: 1000 * 60 * 60 * 24})
+
+    const command = parseBotCommand(msgData.post.message, name)
 
     if (isMessageIgnored(msgData, meId, posts)) {
         return
@@ -77,12 +81,8 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
             }
         }
 
-        const searchPrompt = getWebSearchPrompt(msgData.post.message)
-        const aiResponse = searchPrompt
-            ? {
-                message: await createWebSearchResponse(searchPrompt, botInstructions) ?? "联网搜索失败，未能获得有效响应。",
-                props: {originalMessage: msgData.post.message}
-            }
+        const aiResponse = command
+            ? await runBotCommand(command, msgData.post, botInstructions)
             : await continueThread(chatmessages, msgData)
         const {message, fileId, props} = aiResponse
         botLog.trace({message})
@@ -99,7 +99,7 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
     } catch (e) {
         botLog.error(e)
         await mmClient.createPost({
-            message: "发生了内部错误",
+            message: USER_FACING_ERROR_MESSAGE,
             channel_id: msgData.post.channel_id,
             root_id: msgData.post.root_id || msgData.post.id,
         })
@@ -118,6 +118,11 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
  * @param previousPosts Older posts in the same channel
  */
 function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Post[]): boolean {
+    const threadId = getThreadId(msgData.post)
+    if (isThreadMuted(threadId) && !isJoinCommand(msgData.post.message, name)) {
+        return true
+    }
+
     // we are not in a thread and not mentioned
     if (msgData.post.root_id === '' && !msgData.mentions.includes(meId)) {
         return true
@@ -181,21 +186,6 @@ function parseMessageData(msg: JSONMessageData): MessageData {
         post: JSON.parse(msg.post),
         sender_name: msg.sender_name
     }
-}
-
-function getWebSearchPrompt(message: string): string | undefined {
-    const normalized = stripLeadingBotMention(message.trim())
-    if (!normalized.startsWith(webSearchPrefix)) {
-        return undefined
-    }
-
-    const prompt = normalized.slice(webSearchPrefix.length).trim()
-    return prompt || undefined
-}
-
-function stripLeadingBotMention(message: string): string {
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return message.replace(new RegExp(`^${escapedName}\\s+`, 'i'), '').trim()
 }
 
 /**
