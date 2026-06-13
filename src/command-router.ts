@@ -4,9 +4,10 @@ import {createImagePromptAndFile} from "./plugins/ImagePlugin";
 import {AiResponse} from "./types";
 import {getThreadId, muteThread, unmuteThread} from "./thread-state";
 import {USER_FACING_ERROR_MESSAGE} from "./error-messages";
+import {createWebsiteScreenshots} from "./screenshot-utils";
 
 export type BotCommand =
-    | {type: 'search', prompt: string}
+    | {type: 'search', prompt: string, screenshots: boolean, screenshotLimit: number}
     | {type: 'image', prompt: string, raw: boolean}
     | {type: 'rag', prompt: string, mode?: LightRagMode}
     | {type: 'leave'}
@@ -15,6 +16,7 @@ export type BotCommand =
 export type LightRagMode = 'local' | 'global' | 'hybrid' | 'naive' | 'mix' | 'context';
 
 const supportedLightRagModes = new Set<LightRagMode>(['local', 'global', 'hybrid', 'naive', 'mix', 'context']);
+const defaultScreenshotLimit = Number(process.env['WEB_SEARCH_SCREENSHOT_LIMIT'] ?? 3);
 
 export function parseBotCommand(message: string, botName: string): BotCommand | undefined {
     const normalized = stripLeadingBotMention(message.trim(), botName);
@@ -27,7 +29,7 @@ export function parseBotCommand(message: string, botName: string): BotCommand | 
 
     switch (command.toLowerCase()) {
         case '/search':
-            return rest ? {type: 'search', prompt: rest} : undefined;
+            return parseSearchCommand(rest);
         case '/image':
             return parseImageCommand(rest);
         case '/rag':
@@ -45,8 +47,32 @@ export function parseBotCommand(message: string, botName: string): BotCommand | 
 export async function runBotCommand(command: BotCommand, post: Post, botInstructions: string): Promise<AiResponse> {
     switch (command.type) {
         case 'search':
+            const searchResult = await createWebSearchResponse(command.prompt, botInstructions, command.screenshots);
+            if (!searchResult) {
+                return {message: USER_FACING_ERROR_MESSAGE};
+            }
+
+            if (!command.screenshots) {
+                return {
+                    message: searchResult.message,
+                    props: {originalMessage: post.message}
+                };
+            }
+
+            const screenshotResult = await createWebsiteScreenshots(
+                post.channel_id,
+                searchResult.urls.slice(0, command.screenshotLimit)
+            );
+            const sourceText = searchResult.urls.length
+                ? `\n\n引用 URL：\n${searchResult.urls.slice(0, command.screenshotLimit).map((url, index) => `${index + 1}. ${url}`).join('\n')}`
+                : "";
+            const screenshotText = screenshotResult.omitted.length
+                ? `\n\n截图失败：${screenshotResult.omitted.join('，')}`
+                : "";
+
             return {
-                message: await createWebSearchResponse(command.prompt, botInstructions) ?? USER_FACING_ERROR_MESSAGE,
+                message: `${searchResult.message}${sourceText}${screenshotText}`,
+                fileIds: screenshotResult.fileIds,
                 props: {originalMessage: post.message}
             };
         case 'image':
@@ -67,6 +93,35 @@ export async function runBotCommand(command: BotCommand, post: Post, botInstruct
                 message: "我已回到这个线程，后续可以继续回复。"
             };
     }
+}
+
+function parseSearchCommand(input: string): BotCommand | undefined {
+    let rest = input.trim();
+    let screenshots = false;
+    let screenshotLimit = defaultScreenshotLimit;
+
+    const screenshotMatch = rest.match(/(?:^|\s)--screenshot(?:\s|$)/);
+    if (screenshotMatch) {
+        screenshots = true;
+        rest = rest.replace(/(?:^|\s)--screenshot(?:\s|$)/, ' ').trim();
+    }
+
+    const limitMatch = rest.match(/(?:^|\s)--limit\s+(\d+)(?:\s|$)/);
+    if (limitMatch) {
+        screenshotLimit = Math.min(3, Math.max(1, Number(limitMatch[1])));
+        rest = rest.replace(/(?:^|\s)--limit\s+\d+(?:\s|$)/, ' ').trim();
+    }
+
+    if (!rest) {
+        return undefined;
+    }
+
+    return {
+        type: 'search',
+        prompt: rest,
+        screenshots,
+        screenshotLimit: Math.min(3, Math.max(1, screenshotLimit))
+    };
 }
 
 export function isJoinCommand(message: string, botName: string): boolean {

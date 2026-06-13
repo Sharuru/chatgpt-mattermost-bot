@@ -149,14 +149,16 @@ export async function createChatCompletion(
 
 export async function createWebSearchResponse(
     prompt: string,
-    instructions: string
-): Promise<string | undefined> {
+    instructions: string,
+    includeUrls = false
+): Promise<{message: string, urls: string[]} | undefined> {
     try {
         const response = await openai.responses.create({
             model,
             input: prompt,
             instructions,
             max_output_tokens: max_tokens,
+            include: includeUrls ? ['web_search_call.results' as any] : undefined,
             tools: [
                 {
                     type: 'web_search_preview',
@@ -165,7 +167,10 @@ export async function createWebSearchResponse(
             ]
         });
         log.trace({response});
-        return response.output_text;
+        return {
+            message: response.output_text,
+            urls: includeUrls ? extractWebSearchUrls(response) : []
+        };
     } catch (error) {
         log.error('Error creating web search response:', error);
         return undefined;
@@ -348,4 +353,49 @@ function chooseImageSize(referenceImages: PreparedReferenceImage[]): ImageOutput
         return '1024x1536';
     }
     return '1024x1024';
+}
+
+function extractWebSearchUrls(response: unknown): string[] {
+    const urls: string[] = [];
+    const seen = new Set<string>();
+
+    function addUrl(value: unknown) {
+        if (typeof value !== 'string' || !/^https?:\/\//i.test(value) || seen.has(value)) {
+            return;
+        }
+        seen.add(value);
+        urls.push(value);
+    }
+
+    function visit(value: unknown) {
+        if (!value || typeof value !== 'object') {
+            return;
+        }
+
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                visit(item);
+            }
+            return;
+        }
+
+        const record = value as Record<string, unknown>;
+        if (record.type === 'url_citation') {
+            addUrl(record.url);
+        }
+
+        if (record.url) {
+            addUrl(record.url);
+        }
+        if (record.source_website_url) {
+            addUrl(record.source_website_url);
+        }
+
+        for (const nested of Object.values(record)) {
+            visit(nested);
+        }
+    }
+
+    visit(response);
+    return urls;
 }

@@ -16,10 +16,14 @@ WORKDIR /app
 ARG NODE_ENV=production
 ENV NODE_ENV $NODE_ENV
 ENV PLUGINS=image-plugin
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# Avoid running as root:
+USER root
+RUN apk add --no-cache chromium
+
 USER node
 
+# Avoid running as root:
 COPY --from=npm_builder [ "/app/node_modules/", "./node_modules/" ]
 COPY --from=npm_builder [ "/app/dist/", "./src/" ]
 COPY [ "./license.md", "./" ]

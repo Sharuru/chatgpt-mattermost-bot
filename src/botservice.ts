@@ -84,7 +84,7 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
         const aiResponse = command
             ? await runBotCommand(command, msgData.post, botInstructions)
             : await continueThread(chatmessages, msgData)
-        const {message, fileId, props} = aiResponse
+        const {message, fileId, fileIds, props} = aiResponse
         botLog.trace({message})
 
         // create answer response
@@ -93,7 +93,7 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
             channel_id: msgData.post.channel_id,
             props,
             root_id: msgData.post.root_id || msgData.post.id,
-            file_ids: fileId ? [fileId] : undefined
+            file_ids: fileIds?.length ? fileIds : (fileId ? [fileId] : undefined)
         })
         botLog.trace({msg: newPost})
     } catch (e) {
