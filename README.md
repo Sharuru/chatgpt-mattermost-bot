@@ -58,6 +58,7 @@
 | `OPENAI_MAX_TOKENS` | `8192` | 输出 token 上限 |
 | `OPENAI_TEMPERATURE` | `1` | 采样温度 |
 | `OPENAI_WEB_SEARCH_TOOL` | `web_search` | 可设为 `web_search` 或 `web_search_preview` |
+| `OPENAI_WEB_SEARCH_MAX_TOKENS` | 同 `OPENAI_MAX_TOKENS` | `/search` 输出 token 上限 |
 | `OPENAI_WEB_SEARCH_CONTEXT_SIZE` | `medium` | `low`、`medium`、`high` |
 
 注意：`OPENAI_BASE_PATH` 不被代码使用，请使用 `OPENAI_API_BASE`。
@@ -147,6 +148,7 @@ services:
       OPENAI_API_BASE: http://your-openai-compatible-endpoint/v1
       OPENAI_MODEL_NAME: gpt-5.5
       OPENAI_WEB_SEARCH_TOOL: web_search
+      OPENAI_WEB_SEARCH_MAX_TOKENS: 2048
       OPENAI_WEB_SEARCH_CONTEXT_SIZE: medium
 
       OPENAI_IMAGE_QUALITY: medium

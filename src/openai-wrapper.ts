@@ -17,6 +17,7 @@ const openai = new OpenAI({
 
 const model = process.env['OPENAI_MODEL_NAME'] ?? 'gpt-4.1';
 const max_tokens = Number(process.env['OPENAI_MAX_TOKENS'] ?? 8192);
+const webSearchMaxTokens = Number(process.env['OPENAI_WEB_SEARCH_MAX_TOKENS'] ?? max_tokens);
 const temperature = Number(process.env['OPENAI_TEMPERATURE'] ?? 1);
 const imageModel = process.env['OPENAI_IMAGE_MODEL'] ?? 'gpt-image-2';
 const imageEditModel = process.env['OPENAI_IMAGE_EDIT_MODEL'] ?? imageModel;
@@ -30,7 +31,7 @@ const webSearchContextSize = normalizeWebSearchContextSize(process.env['OPENAI_W
 
 // Image generation configuration
 const imageQuality = normalizeImageQuality(process.env['OPENAI_IMAGE_QUALITY']);
-log.debug({model, max_tokens, temperature, imageModel, imageEditModel, imageQuality});
+log.debug({model, max_tokens, webSearchMaxTokens, temperature, imageModel, imageEditModel, imageQuality});
 
 const plugins: Map<string, PluginBase<any>> = new Map();
 const functions: OpenAI.Chat.ChatCompletionCreateParams.Function[] = [];
@@ -161,7 +162,7 @@ export async function createWebSearchResponse(
             model,
             input: prompt,
             instructions: options.instructions,
-            max_output_tokens: max_tokens,
+            max_output_tokens: webSearchMaxTokens,
             tool_choice: options.forceSearch ? 'required' : undefined,
             tools: [
                 {
